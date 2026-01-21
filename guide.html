@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block header %}User Guide{% endblock %}
+{% block content %}
+<div style="background: white; padding: 30px; border-radius: 8px;">
+    <h2>How to use the Invoice Automation System</h2>
+    <br>
+    <ul>
+        <li style="margin-bottom: 15px;"><strong>Step 1: Check Orders.</strong> Navigate to 'Orders Management'. Pending orders that need invoicing will have a green "Auto-Generate Invoice" button.</li>
+        <li style="margin-bottom: 15px;"><strong>Step 2: Generate Invoice.</strong> Click the button. The AI will pre-fill the Client Name, Email, and Amount from the order history. Review the details.</li>
+        <li style="margin-bottom: 15px;"><strong>Step 3: Confirm.</strong> Click "Confirm & Send". The invoice is created, marked as 'Sent', and the Order status updates to 'Invoiced'.</li>
+        <li style="margin-bottom: 15px;"><strong>Step 4: Tracking.</strong> Use the 'Invoice Management' page to search for invoices by their unique code (e.g., INV-2025...).</li>
+        <li style="margin-bottom: 15px;"><strong>Step 5: Audit.</strong> If anything goes wrong, check the 'Audit Log' to see system failures or user actions.</li>
+    </ul>
+</div>
+{% endblock %}

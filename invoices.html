@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block header %}
+    Invoices Management
+{% endblock %}
+
+{% block content %}
+
+<style>
+    /* Filter Bar Styles */
+    .filter-container {
+        background: white; padding: 20px; border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 25px;
+        display: flex; flex-wrap: wrap; gap: 15px; align-items: center; border: 1px solid #eee;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 5px; }
+    .filter-label { font-size: 12px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; }
+    .filter-input, .filter-select { padding: 10px 12px; border: 1px solid #dcdcdc; border-radius: 6px; font-size: 14px; min-width: 150px; }
+    .btn-filter { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; }
+    .btn-reset { background-color: #ecf0f1; color: #7f8c8d; border: 1px solid #bdc3c7; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; text-decoration: none; display: flex; align-items: center; }
+    
+    /* High Contrast Badges */
+    .badge {
+        padding: 6px 12px; border-radius: 20px; font-weight: 700; font-size: 12px;
+        text-transform: uppercase; display: inline-block; letter-spacing: 0.5px;
+        color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .badge-Paid { background-color: #27ae60; }
+    .badge-Pending { background-color: #f39c12; }
+    .badge-Sent { background-color: #2980b9; }
+    .badge-Overdue { background-color: #c0392b; }
+    .badge-Draft { background-color: #7f8c8d; }
+</style>
+
+<form method="GET" action="{{ url_for('invoices') }}" class="filter-container">
+    <div class="filter-group" style="flex: 1; min-width: 250px;">
+        <label class="filter-label">Search</label>
+        <input type="text" name="search" class="filter-input" placeholder="Invoice # or Client Name..." value="{{ request.args.get('search', '') }}">
+    </div>
+    <div class="filter-group">
+        <label class="filter-label">Status</label>
+        <select name="status" class="filter-select">
+            <option value="All" {% if request.args.get('status') == 'All' %}selected{% endif %}>All Statuses</option>
+            <option value="Paid" {% if request.args.get('status') == 'Paid' %}selected{% endif %}>Paid</option>
+            <option value="Pending" {% if request.args.get('status') == 'Pending' %}selected{% endif %}>Pending</option>
+            <option value="Overdue" {% if request.args.get('status') == 'Overdue' %}selected{% endif %}>Overdue</option>
+            <option value="Sent" {% if request.args.get('status') == 'Sent' %}selected{% endif %}>Sent</option>
+        </select>
+    </div>
+    <div class="filter-group">
+        <label class="filter-label">Sort By</label>
+        <select name="sort" class="filter-select">
+            <option value="date_desc" {% if request.args.get('sort') == 'date_desc' %}selected{% endif %}>Newest First</option>
+            <option value="date_asc" {% if request.args.get('sort') == 'date_asc' %}selected{% endif %}>Oldest First</option>
+            <option value="amount_high" {% if request.args.get('sort') == 'amount_high' %}selected{% endif %}>Amount: High to Low</option>
+            <option value="amount_low" {% if request.args.get('sort') == 'amount_low' %}selected{% endif %}>Amount: Low to High</option>
+        </select>
+    </div>
+    <button type="submit" class="btn-filter"><i class="fa-solid fa-filter"></i> Apply</button>
+    <a href="{{ url_for('invoices') }}" class="btn-reset">Reset</a>
+</form>
+
+<div class="card">
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Invoice #</th>
+                    <th>Client</th>
+                    <th>Amount</th>
+                    <th>Created</th>
+                    <th>Due Date</th>
+                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: center;">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invoice in invoices %}
+                <tr>
+                    <td style="font-weight: bold; color: #555;">{{ invoice.invoice_code }}</td>
+                    <td>{{ invoice.client.name }}</td>
+                    <td>${{ "%.2f"|format(invoice.amount) }}</td>
+                    <td>{{ invoice.date_created.strftime('%Y-%m-%d') }}</td>
+                    <td>{{ invoice.date_due.strftime('%Y-%m-%d') }}</td>
+                    
+                    <td style="text-align: center;">
+                        <span class="badge badge-{{ invoice.status }}">{{ invoice.status }}</span>
+                    </td>
+                    
+                    <td style="text-align: center;">
+                        <a href="{{ url_for('view_invoice', invoice_id=invoice.id) }}" class="btn btn-sm btn-secondary">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 30px; color: #7f8c8d;">
+                        <i class="fa-regular fa-folder-open" style="font-size: 30px; margin-bottom: 10px;"></i><br>
+                        No invoices found matching your criteria.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
