@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+
+{% block header %}
+    Dashboard Overview
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+
+    <style>
+        /* CSS specific to the new Dashboard Layout */
+        
+        /* 1. TOP SECTION: KPI CARDS (4 Colored Cards) */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 25px;
+            /* margin-top removed so it sits at the top */
+            margin-bottom: 30px;
+        }
+
+        .kpi-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 160px;
+            position: relative;
+        }
+
+        .kpi-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .icon-box {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        /* Icon Colors */
+        .icon-order { background-color: #fff4de; color: #ff9f43; }
+        .icon-sales { background-color: #e0f2fe; color: #3498db; }
+        .icon-product { background-color: #d1fae5; color: #10b981; }
+        .icon-customer { background-color: #f3e8ff; color: #a855f7; }
+
+        .kpi-title {
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-top: 5px;
+        }
+
+        .growth-badge {
+            position: absolute;
+            bottom: 25px;
+            right: 25px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .growth-up { background-color: #d1fae5; color: #047857; }
+        .growth-down { background-color: #fee2e2; color: #b91c1c; }
+
+
+        /* 2. MIDDLE SECTION: STATS (2 Big Text Cards) */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        }
+
+        .stat-card h2 {
+            font-size: 20px;
+            color: #0f172a;
+            margin-bottom: 25px;
+            font-weight: 700;
+        }
+
+        .metric-row {
+            margin-bottom: 30px;
+        }
+
+        .big-number {
+            font-size: 42px;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.2;
+        }
+
+        .sub-label {
+            font-size: 14px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .trend-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .trend-up { color: #10b981; }
+        .trend-down { color: #ef4444; }
+        .trend-text { color: #64748b; font-weight: 500;}
+
+        /* 3. BOTTOM SECTION: GRAPHS */
+        .card { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+            text-align: center; 
+        }
+        .card h3 { 
+            font-size: 14px; 
+            color: #7f8c8d; 
+            margin-bottom: 10px; 
+            text-transform: uppercase; 
+        }
+    </style>
+
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <div class="icon-box icon-order"><i class="fa-solid fa-wallet"></i></div>
+                <div style="cursor: pointer;"><i class="fa-solid fa-ellipsis-vertical"></i></div>
+            </div>
+            <div>
+                <div class="kpi-title">Total Order</div>
+                <div class="kpi-value">{{ total_orders }}</div>
+            </div>
+            <div class="growth-badge {% if order_growth >= 0 %}growth-up{% else %}growth-down{% endif %}">
+                {% if order_growth >= 0 %}+{% endif %}{{ "%.1f"|format(order_growth) }}%
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <div class="icon-box icon-sales"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                <div style="cursor: pointer;"><i class="fa-solid fa-ellipsis-vertical"></i></div>
+            </div>
+            <div>
+                <div class="kpi-title">Total Sales</div>
+                <div class="kpi-value">{{ total_sales }}</div>
+            </div>
+            <div class="growth-badge {% if sales_growth >= 0 %}growth-up{% else %}growth-down{% endif %}">
+                {% if sales_growth >= 0 %}+{% endif %}{{ "%.1f"|format(sales_growth) }}%
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <div class="icon-box icon-product"><i class="fa-solid fa-credit-card"></i></div>
+                <div style="cursor: pointer;"><i class="fa-solid fa-ellipsis-vertical"></i></div>
+            </div>
+            <div>
+                <div class="kpi-title">Paid Orders</div>
+                <div class="kpi-value">{{ products_sold }}</div>
+            </div>
+            <div class="growth-badge {% if product_growth >= 0 %}growth-up{% else %}growth-down{% endif %}">
+                {% if product_growth >= 0 %}+{% endif %}{{ "%.1f"|format(product_growth) }}%
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <div class="icon-box icon-customer"><i class="fa-solid fa-user-plus"></i></div>
+                <div style="cursor: pointer;"><i class="fa-solid fa-ellipsis-vertical"></i></div>
+            </div>
+            <div>
+                <div class="kpi-title">New Customers</div>
+                <div class="kpi-value">{{ new_customers }}</div>
+            </div>
+            <div class="growth-badge growth-up">
+                +{{ "%.1f"|format(customer_growth) }}%
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h2>Orders YTD</h2>
+            
+            <div class="metric-row">
+                <div class="big-number">${{ ytd_sales }}</div>
+                <div class="sub-label">YTD Revenue</div>
+                <div class="trend-line">
+                    <span class="{{ 'trend-up' if ytd_pos else 'trend-down' }}">
+                        <i class="fa-solid fa-caret-{{ 'up' if ytd_pos else 'down' }}"></i> 
+                        ${{ ytd_sales_growth }}
+                    </span>
+                    <span class="trend-text">vs Last Year</span>
+                </div>
+            </div>
+
+            <div class="metric-row">
+                <div class="big-number">{{ ytd_count }}</div>
+                <div class="sub-label">Total Orders YTD</div>
+                <div class="trend-line">
+                    <span class="{{ 'trend-up' if ytd_count_pos else 'trend-down' }}">
+                        <i class="fa-solid fa-caret-{{ 'up' if ytd_count_pos else 'down' }}"></i> 
+                        {{ ytd_count_growth }}
+                    </span>
+                    <span class="trend-text">vs Last Year</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <h2>Orders This Month</h2>
+            
+            <div class="metric-row">
+                <div class="big-number">${{ mtd_sales }}</div>
+                <div class="sub-label">MTD Revenue</div>
+                <div class="trend-line">
+                    <span class="{{ 'trend-up' if mtd_pos else 'trend-down' }}">
+                        <i class="fa-solid fa-caret-{{ 'up' if mtd_pos else 'down' }}"></i> 
+                        ${{ mtd_sales_diff }}
+                    </span>
+                    <span class="trend-text">vs Last Month</span>
+                </div>
+            </div>
+
+            <div class="metric-row">
+                <div class="big-number">{{ mtd_count }}</div>
+                <div class="sub-label">Total Orders MTD</div>
+                <div class="trend-line">
+                    <span class="{{ 'trend-up' if mtd_count_pos else 'trend-down' }}">
+                        <i class="fa-solid fa-caret-{{ 'up' if mtd_count_pos else 'down' }}"></i> 
+                        {{ mtd_count_diff }}
+                    </span>
+                    <span class="trend-text">vs Last Month</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 20px; margin-top: 10px;">
+
+        <div class="card" style="flex: 1 1 100%; box-sizing: border-box;">
+            <h3 style="margin-bottom: 15px;">Invoiced: Reality vs Target Sales (Monthly)</h3>
+            <div style="height: 300px;">
+                <canvas id="invoicedBarChart"></canvas>
+            </div>
+        </div>
+
+        <div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 20px;">
+             <div class="card">
+                 <h3>Orders YTD Status</h3>
+                 <div style="height: 200px; display: flex; justify-content: center;">
+                     <canvas id="ordersYtdChart"></canvas>
+                 </div>
+             </div>
+             <div class="card">
+                 <h3>Orders This Month Status</h3>
+                 <div style="height: 200px; display: flex; justify-content: center;">
+                     <canvas id="ordersMtdChart"></canvas>
+                 </div>
+             </div>
+        </div>
+
+        <div class="card" style="flex: 1 1 300px;">
+             <h3 style="margin-bottom: 20px;">Top Clients (Revenue Progress)</h3>
+             <div class="client-progress-list">
+                 {% for item in top_clients_progress %}
+                    <div style="margin-bottom: 20px; text-align: left;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #555;">
+                            <strong>{{ item.name }}</strong>
+                            <span>${{ "%.2f"|format(item.amount) }}</span>
+                        </div>
+                        <div style="background-color: #e9ecef; height: 10px; border-radius: 5px; overflow: hidden;">
+                            <div style="background-color: #3498db; height: 100%; border-radius: 5px; width: {{ item.percent }}%;"></div>
+                        </div>
+                    </div>
+                 {% else %}
+                 <p>No client data available for progress view.</p>
+                 {% endfor %}
+             </div>
+        </div>
+
+         <div class="card" style="flex: 1 1 400px;">
+            <h3>Customer Satisfaction Trend</h3>
+             <div style="height: 250px;">
+                <canvas id="satisfactionChart"></canvas>
+             </div>
+        </div>
+         <div class="card" style="flex: 1 1 400px;">
+            <h3>Volume vs Service Level</h3>
+             <div style="height: 250px;">
+                <canvas id="volumeServiceChart"></canvas>
+             </div>
+        </div>
+    </div>
+
+    <script>
+        // Helper for common chart options
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+                x: { grid: { display: false } },
+                y: { grid: { color: '#f0f0f0' }, beginAtZero: true }
+            }
+        };
+
+        // 1. Invoiced Bar Chart
+        const ctxInvoice = document.getElementById('invoicedBarChart').getContext('2d');
+        new Chart(ctxInvoice, {
+            type: 'bar',
+            data: {
+                labels: {{ chart_invoice_months | tojson }},
+                datasets: [
+                    {
+                        label: 'Reality Sales ($)',
+                        data: {{ chart_invoice_reality | tojson }},
+                        backgroundColor: '#2ecc71', // Green
+                        borderRadius: 5
+                    },
+                    {
+                        label: 'Target Sales ($)',
+                        data: {{ chart_invoice_target | tojson }},
+                        backgroundColor: '#f1c40f', // Yellow
+                        borderRadius: 5
+                    }
+                ]
+            },
+            options: commonOptions
+        });
+
+        // Common options for Donut charts (no axes)
+        const donutOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            cutout: '70%' // Makes it a donut instead of pie
+        };
+
+        // 2. Orders YTD Donut Chart
+        const ctxYtd = document.getElementById('ordersYtdChart').getContext('2d');
+        new Chart(ctxYtd, {
+            type: 'doughnut',
+            data: {
+                labels: ['Invoiced ($)', 'Pending ($)'],
+                datasets: [{
+                    data: {{ chart_orders_ytd_pct | tojson }},
+                    backgroundColor: ['#3498db', '#ecf0f1'],
+                    borderWidth: 0
+                }]
+            },
+            options: donutOptions
+        });
+
+        // 3. Orders MTD Donut Chart
+        const ctxMtd = document.getElementById('ordersMtdChart').getContext('2d');
+        new Chart(ctxMtd, {
+            type: 'doughnut',
+            data: {
+                labels: ['Invoiced ($)', 'Pending ($)'],
+                datasets: [{
+                    data: {{ chart_orders_mtd_pct | tojson }},
+                    backgroundColor: ['#e74c3c', '#ecf0f1'],
+                    borderWidth: 0
+                }]
+            },
+            options: donutOptions
+        });
+
+        // 4. Customer Satisfaction Area Chart
+        const ctxSat = document.getElementById('satisfactionChart').getContext('2d');
+        new Chart(ctxSat, {
+            type: 'line',
+            data: {
+                labels: {{ chart_sat_labels | tojson }},
+                datasets: [{
+                    label: 'Satisfaction Score',
+                    data: {{ chart_sat_data | tojson }},
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46, 204, 113, 0.2)', // Transparent fill
+                    fill: true,
+                    tension: 0.4 // Smooth curves
+                }]
+            },
+            options: commonOptions
+        });
+
+        // 5. Volume vs Service Level Stacked Bar Chart
+        const ctxVol = document.getElementById('volumeServiceChart').getContext('2d');
+        new Chart(ctxVol, {
+            type: 'bar',
+            data: {
+                labels: {{ chart_vol_service_labels | tojson }},
+                datasets: [
+                    {
+                        label: 'Orders Placed',
+                        data: {{ chart_vol_data | tojson }},
+                        backgroundColor: '#3498db',
+                        borderRadius: 5
+                    },
+                    {
+                        label: 'Invoices Generated',
+                        data: {{ chart_service_data | tojson }},
+                        backgroundColor: '#2ecc71',
+                        borderRadius: 5
+                    }
+                ]
+            },
+            options: {
+                ...commonOptions,
+                scales: {
+                    x: { stacked: true, grid: { display: false } },
+                    y: { stacked: true, grid: { color: '#f0f0f0' } }
+                }
+            }
+        });
+    </script>
+{% endblock %}

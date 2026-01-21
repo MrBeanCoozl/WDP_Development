@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block header %}
+    <span style="color: #c0392b;">DANGER ZONE</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="card" style="max-width: 600px; margin: 30px auto; text-align: center; border: 2px solid #e74c3c;">
+    
+    <div style="font-size: 60px; color: #e74c3c; margin-bottom: 20px;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+    </div>
+
+    <h2 style="color: #c0392b; margin-bottom: 15px;">ADVANCED SYSTEM CONTROLS</h2>
+    
+    <p style="color: #555; line-height: 1.6; margin-bottom: 30px;">
+        These actions are irreversible. Proceed with caution.
+    </p>
+
+    <div style="background: #fff8e1; border: 1px solid #ffe0b2; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: left;">
+        <h3 style="margin-top: 0; color: #e67e22;"><i class="fa-solid fa-clock-rotate-left"></i> Time Travel (Testing)</h3>
+        
+        <div style="margin-bottom: 15px; font-size: 14px;">
+            Current Status: 
+            {% if days_skipped > 0 %}
+                <strong style="color: #e67e22;">{{ days_skipped }} days in the past</strong>
+            {% else %}
+                <strong style="color: #27ae60;"> synchronized (Present)</strong>
+            {% endif %}
+        </div>
+
+        <form method="POST" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <input type="hidden" name="action" value="time_skip">
+            <input type="number" name="days" placeholder="Days to skip (e.g. 30)" required style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 180px;">
+            <button type="submit" class="btn btn-warning">
+                Skip Time (Test Overdue)
+            </button>
+        </form>
+
+        <form method="POST">
+            <input type="hidden" name="action" value="undo_time_skip">
+            <button type="submit" class="btn btn-success" style="width: 100%;" {% if days_skipped == 0 %}disabled style="opacity: 0.6; cursor: not-allowed;"{% endif %}>
+                <i class="fa-solid fa-rotate-left"></i> Restore to Original Time
+            </button>
+        </form>
+    </div>
+
+    <div style="background: #ffe3e3; border: 1px solid #f5c6cb; padding: 20px; border-radius: 8px; text-align: left;">
+        <h3 style="margin-top: 0; color: #c0392b;"><i class="fa-solid fa-trash-can"></i> Hard System Reset</h3>
+        <p style="font-size: 14px; margin-bottom: 15px;">
+            Wipe all <strong>Business Data</strong> (Clients, Orders, Invoices, Logs). Admin accounts are NOT deleted.
+        </p>
+        <form method="POST">
+            <input type="hidden" name="action" value="wipe">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you 100% sure? This data is gone forever.');" style="width: 100%;">
+                Yes, Wipe Everything
+            </button>
+        </form>
+    </div>
+
+    <div style="margin-top: 30px;">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+            Cancel & Return to Safety
+        </a>
+    </div>
+
+</div>
+
+{% endblock %}

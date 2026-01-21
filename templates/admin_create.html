@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block header %}Create New Account{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width: 500px; margin: 0 auto;">
+    <form method="POST">
+        <div style="margin-bottom: 15px;">
+            <label>Username</label>
+            <input type="text" name="username" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label>Password</label>
+            <input type="password" name="password" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+        </div>
+        <div style="margin-bottom: 20px;">
+            <label>Authority Level</label>
+            <select name="role" required style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+                <option value="Staff">Staff (Read Only)</option>
+                <option value="Manager">Manager (Create/Generate, No Delete)</option>
+                <option value="SuperAdmin">SuperAdmin (Full Access)</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+    </form>
+    <div style="text-align: center; margin-top: 15px;">
+        <a href="{{ url_for('admin_panel') }}">Cancel</a>
+    </div>
+</div>
+{% endblock %}
