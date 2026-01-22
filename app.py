@@ -8,6 +8,7 @@ import random
 import os
 import json
 import smtplib
+import re  # For password validation
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -26,13 +27,26 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 
 # --- EMAIL CONFIGURATION (YOU MUST EDIT THIS) ---
-# Replace the placeholders below with your REAL Gmail details.
 app.config['SMTP_SERVER'] = 'smtp.gmail.com'      
 app.config['SMTP_PORT'] = 587                       
-app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'   # <--- SENDER EMAIL (Your Admin Email)
-app.config['SMTP_PASSWORD'] = 'iilv ertj fvps wyai'   # <--- SENDER APP PASSWORD
+app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'   
+app.config['SMTP_PASSWORD'] = 'iilv ertj fvps wyai'   
 
 db = SQLAlchemy(app)
+
+# --- SYSTEM SETTINGS (Password Visibility) ---
+SETTINGS_FILE = os.path.join(basedir, 'system_settings.json')
+
+def get_system_settings():
+    if not os.path.exists(SETTINGS_FILE): return {'show_passwords': False}
+    try:
+        with open(SETTINGS_FILE, 'r') as f: return json.load(f)
+    except: return {'show_passwords': False}
+
+def update_system_setting(key, value):
+    settings = get_system_settings()
+    settings[key] = value
+    with open(SETTINGS_FILE, 'w') as f: json.dump(settings, f)
 
 # --- TIME TRAVEL TRACKER ---
 OFFSET_FILE = os.path.join(basedir, 'time_offset.json')
@@ -58,7 +72,7 @@ class User(db.Model):
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False) 
     role = db.Column(db.String(20), default='Staff') 
-    email = db.Column(db.String(120), unique=True, nullable=True) # UNIQUE EMAIL STORAGE
+    email = db.Column(db.String(120), unique=True, nullable=True)
     is_suspended = db.Column(db.Boolean, default=False)
     must_change_password = db.Column(db.Boolean, default=False)
 
@@ -137,7 +151,6 @@ def send_temp_password_email(user_email, temp_password):
     smtp_server = app.config['SMTP_SERVER']
     smtp_port = app.config['SMTP_PORT']
 
-    # --- FALLBACK: Print to console if not configured ---
     if 'your_email' in sender_email or 'your_app_password' in sender_password:
         print("\n" + "="*60)
         print(f" [DEBUG MODE] EMAIL NOT CONFIGURED")
@@ -173,13 +186,18 @@ def send_temp_password_email(user_email, temp_password):
         server.quit()
         return True, "Email sent successfully."
     except Exception as e:
-        # --- FALLBACK: Print to console on error ---
-        print("\n" + "="*60)
-        print(f" [ERROR] EMAIL FAILED TO SEND: {e}")
-        print(f" Target Email: {user_email}")
-        print(f" TEMP PASSWORD: {temp_password}")
-        print("="*60 + "\n")
+        print(f" [ERROR] EMAIL FAILED: {e}")
         return False, f"Failed: {str(e)}"
+
+# --- PASSWORD VALIDATION HELPER ---
+def is_password_strong(password):
+    # Criteria: 8+ chars, 1 Uppercase, 1 Lowercase, 1 Number, 1 Special Char
+    if len(password) < 8: return False, "Password must be at least 8 characters long."
+    if not re.search(r"[A-Z]", password): return False, "Password must contain at least one uppercase letter."
+    if not re.search(r"[a-z]", password): return False, "Password must contain at least one lowercase letter."
+    if not re.search(r"\d", password): return False, "Password must contain at least one number."
+    if not re.search(r"[ !@#$%^&*()_+\-=\[\]{};':\"\\|,.<>\/?]", password): return False, "Password must contain at least one special character."
+    return True, "Valid"
 
 @app.before_request
 def load_user():
@@ -248,21 +266,25 @@ def change_password():
         confirm_pass = request.form['confirm_password']
         email_input = request.form.get('email')
 
-        if new_pass != confirm_pass or len(new_pass) < 4:
-            flash('Invalid password or mismatch.')
+        # 1. Check Matching
+        if new_pass != confirm_pass:
+            flash('Passwords do not match.')
             return redirect(url_for('change_password'))
         
-        # LOGIC: Only update email if the user doesn't currently have one
+        # 2. Check Strength
+        is_strong, msg = is_password_strong(new_pass)
+        if not is_strong:
+            flash(f'Security Requirement: {msg}')
+            return redirect(url_for('change_password'))
+        
+        # 3. Handle Email
         if not user.email:
             if not email_input:
                 flash('You must provide a recovery email address.')
                 return redirect(url_for('change_password'))
-            
-            # Check if email is unique
             if User.query.filter(User.email == email_input, User.id != user.id).first():
                 flash('This email is already associated with another account.')
                 return redirect(url_for('change_password'))
-            
             user.email = email_input
 
         user.password = new_pass
@@ -273,7 +295,6 @@ def change_password():
         
     return render_template('change_password.html', user=user)
 
-# --- ORDERS ROUTE ---
 @app.route('/orders')
 def orders():
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -309,7 +330,6 @@ def orders():
     orders = query.all()
     return render_template('orders.html', orders=orders)
 
-# --- INVOICE ROUTES ---
 @app.route('/invoices', methods=['GET'])
 def invoices():
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -426,6 +446,7 @@ def delete_invoice(invoice_id):
         db.session.rollback()
         return redirect(url_for('error_page'))
 
+# --- DASHBOARD (RESTORED FULL LOGIC) ---
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -520,7 +541,6 @@ def dashboard():
         chart_vol_service_labels=chart_vol_service_labels, chart_vol_data=chart_vol_data, chart_service_data=chart_service_data
     )
 
-# --- AUDIT LOG ROUTE (FIXED SEARCH) ---
 @app.route('/audit')
 def audit_log():
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -566,7 +586,12 @@ def admin_panel():
     query = User.query
     if search_q: query = query.filter(or_(User.custom_id.like(f"%{search_q}%"), User.username.like(f"%{search_q}%")))
     users = query.all()
-    return render_template('admin_panel.html', users=users)
+    
+    # PASS SETTINGS TO TEMPLATE
+    settings = get_system_settings()
+    show_passwords = settings.get('show_passwords', False)
+    
+    return render_template('admin_panel.html', users=users, show_passwords=show_passwords)
 
 @app.route('/admin/create', methods=['GET', 'POST'])
 @admin_required
@@ -666,10 +691,9 @@ def reset_password(user_id):
         log_type = 'Warning'
 
     # 6. Update the Log Message to include the history (OLD EMAIL)
+    change_note = ""
     if old_email and old_email != user.email:
         change_note = f" (Email changed from {old_email} to {user.email})"
-    else:
-        change_note = ""
 
     log_action('SuperAdmin', session.get('username'), 'Credentials Updated', 'User', user.custom_id, log_type, f'Reset password. Email: {email_msg}{change_note}')
     return redirect(url_for('admin_panel'))
@@ -701,11 +725,21 @@ def delete_admin(user_id):
 @admin_required
 def danger_zone():
     current_skipped = get_total_skipped_days()
+    # FETCH SETTINGS
+    settings = get_system_settings()
+    show_passwords = settings.get('show_passwords', False)
     
     if request.method == 'POST':
         action = request.form.get('action')
         
-        if action == 'wipe':
+        if action == 'toggle_passwords':
+            new_state = not show_passwords
+            update_system_setting('show_passwords', new_state)
+            log_action('SuperAdmin', session.get('username'), 'Security Policy Change', 'System', 'ALL', 'Warning', f'Admin password visibility set to {new_state}')
+            flash(f'Password visibility turned {"ON" if new_state else "OFF"}.', 'warning' if new_state else 'success')
+            return redirect(url_for('danger_zone'))
+
+        elif action == 'wipe':
             try:
                 Invoice.query.delete()
                 OrderItem.query.delete()
@@ -773,7 +807,7 @@ def danger_zone():
 
         return redirect(url_for('dashboard'))
             
-    return render_template('danger_zone.html', days_skipped=current_skipped)
+    return render_template('danger_zone.html', days_skipped=current_skipped, show_passwords=show_passwords)
 
 @app.route('/generate_bulk_data')
 @operator_required

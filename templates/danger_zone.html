@@ -15,8 +15,29 @@
     <h2 style="color: #c0392b; margin-bottom: 15px;">ADVANCED SYSTEM CONTROLS</h2>
     
     <p style="color: #555; line-height: 1.6; margin-bottom: 30px;">
-        These actions are irreversible. Proceed with caution.
+        These actions are irreversible or high risk. Proceed with caution.
     </p>
+
+    <div style="background: #e3f2fd; border: 1px solid #90caf9; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: left;">
+        <h3 style="margin-top: 0; color: #1976d2;"><i class="fa-solid fa-eye"></i> Admin Visibility Controls</h3>
+        <p style="font-size: 14px; margin-bottom: 15px;">
+            Reveal user passwords in the Admin Panel? <br>
+            <span style="color: #c0392b; font-weight: bold;">Only enable this during maintenance/debugging.</span>
+        </p>
+        
+        <form method="POST">
+            <input type="hidden" name="action" value="toggle_passwords">
+            {% if show_passwords %}
+                <button type="submit" class="btn btn-secondary" style="width: 100%;">
+                    <i class="fa-solid fa-eye-slash"></i> Turn OFF Visibility (Hide Passwords)
+                </button>
+            {% else %}
+                <button type="submit" class="btn btn-warning" style="width: 100%;">
+                    <i class="fa-solid fa-eye"></i> Turn ON Visibility (Show Passwords)
+                </button>
+            {% endif %}
+        </form>
+    </div>
 
     <div style="background: #fff8e1; border: 1px solid #ffe0b2; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: left;">
         <h3 style="margin-top: 0; color: #e67e22;"><i class="fa-solid fa-clock-rotate-left"></i> Time Travel (Testing)</h3>
@@ -32,16 +53,16 @@
 
         <form method="POST" style="display: flex; gap: 10px; margin-bottom: 20px;">
             <input type="hidden" name="action" value="time_skip">
-            <input type="number" name="days" placeholder="Days to skip (e.g. 30)" required style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 180px;">
+            <input type="number" name="days" placeholder="Days to skip" required style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 180px;">
             <button type="submit" class="btn btn-warning">
-                Skip Time (Test Overdue)
+                Skip Time
             </button>
         </form>
 
         <form method="POST">
             <input type="hidden" name="action" value="undo_time_skip">
             <button type="submit" class="btn btn-success" style="width: 100%;" {% if days_skipped == 0 %}disabled style="opacity: 0.6; cursor: not-allowed;"{% endif %}>
-                <i class="fa-solid fa-rotate-left"></i> Restore to Original Time
+                Restore to Original Time
             </button>
         </form>
     </div>
