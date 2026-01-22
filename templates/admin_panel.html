@@ -175,7 +175,7 @@
             <tr>
                 <th>Admin ID</th>
                 <th>Username</th>
-                <th>Current Password</th>
+                <th>Email</th>
                 <th>Authority</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -186,7 +186,13 @@
             <tr>
                 <td>{{ user.custom_id }}</td>
                 <td><strong>{{ user.username }}</strong></td>
-                <td><span class="password-display">{{ user.password }}</span></td>
+                <td>
+                    {% if user.email %}
+                        <span style="font-size: 13px; color: #555;">{{ user.email }}</span>
+                    {% else %}
+                        <span style="font-size: 12px; color: #aaa;">Not Set</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if user.role == 'SuperAdmin' %}
                         <span style="color: #e74c3c; font-weight: bold;">SuperAdmin</span>
@@ -210,7 +216,8 @@
                                 <i class="fa-solid fa-user-pen"></i>
                             </a>
                             
-                            <button type="button" class="btn btn-sm btn-primary" title="Reset Credentials" onclick="openResetModal('{{ user.id }}', '{{ user.username }}')">
+                            <button type="button" class="btn btn-sm btn-primary" title="Reset Credentials" 
+                                onclick="openResetModal('{{ user.id }}', '{{ user.username }}', '{{ user.email if user.email else '' }}')">
                                 <i class="fa-solid fa-key"></i>
                             </button>
                             
@@ -250,6 +257,11 @@
             </div>
 
             <div class="form-group">
+                <label>User Email</label>
+                <input type="email" id="resetEmailInput" name="new_email" class="modal-input" placeholder="user@example.com">
+            </div>
+
+            <div class="form-group">
                 <label>New Temporary Password</label>
                 <input type="text" id="tempPasswordInput" name="temp_password" class="modal-input" placeholder="Enter new password" required>
             </div>
@@ -285,15 +297,25 @@
 </div>
 
 <script>
-    function openResetModal(userId, username) {
+    function openResetModal(userId, username, email) {
         document.getElementById('resetUsername').innerText = username;
         document.getElementById('resetUsernameInput').value = username;
+        
+        // Set Email Field
+        if (email && email !== 'None') {
+            document.getElementById('resetEmailInput').value = email;
+        } else {
+            document.getElementById('resetEmailInput').value = '';
+        }
+
         document.getElementById('resetForm').action = "/admin/reset_password/" + userId;
         document.getElementById('resetModal').style.display = 'flex';
         
-        // --- AUTO FOCUS ON PASSWORD FIELD ---
-        // This allows typing immediately without clicking
-        document.getElementById('tempPasswordInput').focus();
+        // --- FIXED AUTO FOCUS ---
+        // Using setTimeout ensures the modal is fully visible before focusing
+        setTimeout(function() {
+            document.getElementById('tempPasswordInput').focus();
+        }, 100);
     }
     
     function closeResetModal() { 

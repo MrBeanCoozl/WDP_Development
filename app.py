@@ -1,11 +1,15 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, g
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, extract, or_, text
+from sqlalchemy.pool import NullPool
 from datetime import datetime, timedelta
 from functools import wraps
 import random
 import os
-import json 
+import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # --- 1. SETUP & CONFIGURATION ---
 app = Flask(__name__)
@@ -15,6 +19,18 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'business_data.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# --- FIX: PREVENT DATABASE TIMEOUTS ---
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'poolclass': NullPool
+}
+
+# --- EMAIL CONFIGURATION (YOU MUST EDIT THIS) ---
+# Replace the placeholders below with your REAL Gmail details.
+app.config['SMTP_SERVER'] = 'smtp.gmail.com'      
+app.config['SMTP_PORT'] = 587                       
+app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'   # <--- SENDER EMAIL (Your Admin Email)
+app.config['SMTP_PASSWORD'] = 'iilv ertj fvps wyai'   # <--- SENDER APP PASSWORD
 
 db = SQLAlchemy(app)
 
@@ -42,6 +58,7 @@ class User(db.Model):
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False) 
     role = db.Column(db.String(20), default='Staff') 
+    email = db.Column(db.String(120), unique=True, nullable=True) # UNIQUE EMAIL STORAGE
     is_suspended = db.Column(db.Boolean, default=False)
     must_change_password = db.Column(db.Boolean, default=False)
 
@@ -113,6 +130,57 @@ def format_k(value):
     if value >= 1000: return f"{value/1000:.1f}k"
     return str(value)
 
+# --- EMAIL SENDER FUNCTION ---
+def send_temp_password_email(user_email, temp_password):
+    sender_email = app.config['SMTP_EMAIL']
+    sender_password = app.config['SMTP_PASSWORD']
+    smtp_server = app.config['SMTP_SERVER']
+    smtp_port = app.config['SMTP_PORT']
+
+    # --- FALLBACK: Print to console if not configured ---
+    if 'your_email' in sender_email or 'your_app_password' in sender_password:
+        print("\n" + "="*60)
+        print(f" [DEBUG MODE] EMAIL NOT CONFIGURED")
+        print(f" Target Email: {user_email}")
+        print(f" TEMP PASSWORD: {temp_password}")
+        print("="*60 + "\n")
+        return False, "Simulated: Password printed to server console."
+
+    if not user_email:
+        return False, "User has no email address saved."
+
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = user_email
+    msg['Subject'] = "Security Notice: Temporary Password Reset"
+
+    body = f"""
+    <h3>Password Reset Notice</h3>
+    <p>Hello,</p>
+    <p>Your administrator has reset your password.</p>
+    <p><strong>Your new temporary password is:</strong> <span style="font-size: 16px; background: #eee; padding: 5px;">{temp_password}</span></p>
+    <p>Please log in immediately and set a new personal password.</p>
+    <br>
+    <p>Regards,<br>System Admin</p>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, user_email, msg.as_string())
+        server.quit()
+        return True, "Email sent successfully."
+    except Exception as e:
+        # --- FALLBACK: Print to console on error ---
+        print("\n" + "="*60)
+        print(f" [ERROR] EMAIL FAILED TO SEND: {e}")
+        print(f" Target Email: {user_email}")
+        print(f" TEMP PASSWORD: {temp_password}")
+        print("="*60 + "\n")
+        return False, f"Failed: {str(e)}"
+
 @app.before_request
 def load_user():
     g.user = None
@@ -174,17 +242,35 @@ def logout():
 def change_password():
     if 'user_id' not in session: return redirect(url_for('login'))
     user = User.query.get(session['user_id'])
+    
     if request.method == 'POST':
         new_pass = request.form['new_password']
         confirm_pass = request.form['confirm_password']
+        email_input = request.form.get('email')
+
         if new_pass != confirm_pass or len(new_pass) < 4:
             flash('Invalid password or mismatch.')
             return redirect(url_for('change_password'))
+        
+        # LOGIC: Only update email if the user doesn't currently have one
+        if not user.email:
+            if not email_input:
+                flash('You must provide a recovery email address.')
+                return redirect(url_for('change_password'))
+            
+            # Check if email is unique
+            if User.query.filter(User.email == email_input, User.id != user.id).first():
+                flash('This email is already associated with another account.')
+                return redirect(url_for('change_password'))
+            
+            user.email = email_input
+
         user.password = new_pass
         user.must_change_password = False 
         db.session.commit()
-        log_action('User', user.username, 'Password Changed', 'User', user.custom_id, 'Success', 'User updated their own password')
+        log_action('User', user.username, 'Password/Email Updated', 'User', user.custom_id, 'Success', 'User updated credentials')
         return redirect(url_for('dashboard'))
+        
     return render_template('change_password.html', user=user)
 
 # --- ORDERS ROUTE ---
@@ -530,16 +616,62 @@ def edit_admin(user_id):
         
     return render_template('admin_edit.html', user=user)
 
+# --- UPDATED ADMIN RESET PASSWORD (DB COMMIT FIRST + LOG HISTORY) ---
 @app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
 @admin_required
 def reset_password(user_id):
     user = User.query.get(user_id)
-    user.password = request.form['temp_password']
+    temp_pass = request.form['temp_password']
     new_username = request.form.get('new_username')
-    if new_username: user.username = new_username
+    new_email = request.form.get('new_email') # Get email from form
+    
+    if new_username: 
+        user.username = new_username
+    
+    # 1. Capture the OLD email before we change it (for logging history)
+    old_email = user.email 
+
+    # 2. Update to NEW Email if provided
+    if new_email and new_email.strip():
+        user.email = new_email.strip()
+    
+    user.password = temp_pass
     user.must_change_password = True
+    
+    # Capture email for sending AFTER commit (so DB connection is free)
+    target_email = user.email
+    
+    # 3. COMMIT TO DB IMMEDIATELY (RELEASES LOCK)
     db.session.commit()
-    log_action('SuperAdmin', session.get('username'), 'Credentials Updated', 'User', user.custom_id, 'Success', f'Reset password for {user.username}')
+    
+    # 4. SEND EMAIL
+    email_status = False
+    email_msg = "No email on file."
+    
+    if target_email:
+        success, msg = send_temp_password_email(target_email, temp_pass)
+        email_status = success
+        email_msg = msg
+    
+    # 5. FLASH RESULT
+    if email_status:
+        flash(f'Reset successful. Email sent to {target_email}.', 'success')
+        log_type = 'Success'
+    else:
+        # Show specific message if simulated
+        if "Simulated" in email_msg:
+            flash(f'Simulated Reset: Password printed to server console.', 'warning')
+        else:
+            flash(f'Reset successful, but EMAIL FAILED: {email_msg} (Check Console for Password)', 'warning')
+        log_type = 'Warning'
+
+    # 6. Update the Log Message to include the history (OLD EMAIL)
+    if old_email and old_email != user.email:
+        change_note = f" (Email changed from {old_email} to {user.email})"
+    else:
+        change_note = ""
+
+    log_action('SuperAdmin', session.get('username'), 'Credentials Updated', 'User', user.custom_id, log_type, f'Reset password. Email: {email_msg}{change_note}')
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin/suspend/<int:user_id>', methods=['POST'])
