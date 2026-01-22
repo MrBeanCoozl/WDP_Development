@@ -7,12 +7,13 @@
 {% block content %}
 
 <style>
+    /* Form Styles */
     .form-card {
         background: white;
         border-radius: 12px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        max-width: 700px;
-        margin: 0 auto;
+        max-width: 800px;
+        margin: 0 auto 30px auto;
         overflow: hidden;
     }
     
@@ -42,34 +43,103 @@
         font-size: 14px;
     }
 
+    /* --- UPDATED BUTTON ACTIONS (Centralized) --- */
+    .form-actions {
+        display: flex;
+        align-items: center;
+        justify-content: center; /* Centered content */
+        gap: 15px;
+        margin-top: 20px;
+    }
+
     .submit-btn {
-        width: 100%;
-        padding: 12px;
+        padding: 10px 30px; /* Slightly wider for better look when centered */
         background-color: #27ae60;
         color: white;
         border: none;
         border-radius: 6px;
-        font-size: 16px;
+        font-size: 15px;
         font-weight: bold;
         cursor: pointer;
         transition: 0.2s;
     }
     .submit-btn:hover { background-color: #219150; }
     
-    .cancel-link {
-        display: block;
-        text-align: center;
-        margin-top: 15px;
-        color: #95a5a6;
+    .btn-back {
+        padding: 10px 30px;
+        background-color: #95a5a6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-size: 15px;
+        font-weight: bold;
+        cursor: pointer;
         text-decoration: none;
-        font-size: 14px;
+        transition: 0.2s;
+        display: inline-block;
     }
-    .cancel-link:hover { color: #7f8c8d; }
+    .btn-back:hover { background-color: #7f8c8d; }
+
+    /* --- INVOICE PREVIEW STYLES --- */
+    .preview-divider {
+        border-top: 2px dashed #eee;
+        margin: 40px 0 30px 0;
+        text-align: center;
+        position: relative;
+    }
+    .preview-divider span {
+        background: white;
+        padding: 0 15px;
+        color: #95a5a6;
+        font-weight: bold;
+        font-size: 14px;
+        position: relative;
+        top: -10px;
+        text-transform: uppercase;
+    }
+
+    .invoice-box {
+        padding: 30px;
+        border: 1px solid #eee;
+        background: white;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        color: #555;
+    }
+    
+    .invoice-header-preview { display: flex; justify-content: space-between; margin-bottom: 40px; border-bottom: 2px solid #3498db; padding-bottom: 20px; }
+    .company-details h2 { margin: 0; color: #2c3e50; font-size: 24px; text-transform: uppercase; }
+    
+    .invoice-meta { text-align: right; }
+    .invoice-meta h1 { margin: 0; font-size: 28px; color: #3498db; text-transform: uppercase; letter-spacing: 2px; }
+    .invoice-meta p { margin: 5px 0; font-size: 13px; }
+
+    .status-stamp {
+        display: inline-block;
+        padding: 6px 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 12px;
+        border-radius: 4px;
+        margin-top: 10px;
+        color: white;
+        letter-spacing: 1px;
+    }
+    .st-Pending { background-color: #f39c12; border: 2px solid #f39c12; }
+
+    .info-section { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 14px; }
+    .bill-to h3 { margin-top: 0; color: #34495e; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; width: 100%; }
+
+    .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+    .invoice-table th { background: #f8f9fa; color: #333; font-weight: bold; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
+    .invoice-table td { padding: 10px; border-bottom: 1px solid #eee; }
+    .invoice-table .total-row td { border-top: 2px solid #3498db; font-weight: bold; font-size: 16px; color: #2c3e50; }
+    
+    .invoice-footer { text-align: center; margin-top: 30px; font-size: 11px; color: #aaa; border-top: 1px solid #eee; padding-top: 15px; }
 </style>
 
 <div class="form-card">
     <div class="form-header">
-        <h3>Invoice Details</h3>
+        <h3>Confirm Invoice Details</h3>
         <span class="order-tag">{{ order.order_code }}</span>
     </div>
     
@@ -96,17 +166,114 @@
                 <i class="fa-solid fa-circle-info" style="margin-top: 3px;"></i>
                 <div>
                     <strong>Auto-Generate:</strong> Invoice ID and Date will be generated automatically upon creation.<br>
-                    Status will be set to <strong>Sent</strong>.
+                    Status will be set to <strong>Pending</strong> initially.
                 </div>
             </div>
 
-            <button type="submit" class="submit-btn">
-                <i class="fa-solid fa-file-invoice"></i> Generate Invoice
-            </button>
-            
-            <a href="{{ url_for('orders') }}" class="cancel-link">Cancel</a>
+            <div class="form-actions">
+                <a href="{{ url_for('orders') }}" class="btn-back">Back</a>
+                <button type="submit" class="submit-btn">
+                    <i class="fa-solid fa-file-invoice"></i> Generate Invoice
+                </button>
+            </div>
         </form>
+
+        <div class="preview-divider">
+            <span>Live Preview</span>
+        </div>
+
+        <div class="invoice-box">
+            <div class="invoice-header-preview">
+                <div class="company-details">
+                    <h2>WDP Fashion</h2>
+                    <p style="font-size: 13px; margin-top: 5px;">
+                        123 Fashion Avenue<br>
+                        Singapore, 560456<br>
+                        admin@wdpfashion.com
+                    </p>
+                </div>
+                <div class="invoice-meta">
+                    <h1>INVOICE</h1>
+                    <p><strong>#INV-PREVIEW</strong></p>
+                    <p>Date: <span id="preview-date"></span></p>
+                    <p>Due: <span id="preview-due"></span></p>
+                    
+                    <div class="status-stamp st-Pending">
+                        Pending
+                    </div>
+                </div>
+            </div>
+        
+            <div class="info-section">
+                <div class="bill-to" style="width: 45%;">
+                    <h3>Bill To:</h3>
+                    <strong>{{ order.client.company }}</strong><br>
+                    Attn: {{ order.client.name }}<br>
+                    {{ order.client.email }}
+                </div>
+                <div class="bill-to" style="width: 45%;">
+                    <h3>Order Reference:</h3>
+                    <strong>Order #{{ order.order_code }}</strong><br>
+                    {{ order.description }}
+                </div>
+            </div>
+        
+            <table class="invoice-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50%;">Description</th>
+                        <th style="width: 10%; text-align: center;">Qty</th>
+                        <th style="width: 20%; text-align: right;">Unit Price</th>
+                        <th style="width: 20%; text-align: right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if order.items %}
+                        {% for item in order.items %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.item_name }}</strong>
+                            </td>
+                            <td style="text-align: center;">{{ item.quantity }}</td>
+                            <td style="text-align: right;">${{ "%.2f"|format(item.unit_price) }}</td>
+                            <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3">
+                                <strong>{{ order.description }}</strong><br>
+                                <span style="font-size: 12px; color: #7f8c8d;">Services/Products rendered as per order agreement.</span>
+                            </td>
+                            <td style="text-align: right;">${{ "%.2f"|format(order.amount) }}</td>
+                        </tr>
+                    {% endif %}
+                    <tr class="total-row">
+                        <td colspan="3" style="text-align: right; border:none;">Total:</td>
+                        <td style="text-align: right;">${{ "%.2f"|format(order.amount) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        
+            <div class="invoice-footer">
+                <p>Thank you for your business!</p>
+                <p>Payment is due within 30 days. This is a computer-generated preview.</p>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const today = new Date();
+        const due = new Date();
+        due.setDate(today.getDate() + 30);
+
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        
+        document.getElementById('preview-date').textContent = today.toLocaleDateString('en-US', options);
+        document.getElementById('preview-due').textContent = due.toLocaleDateString('en-US', options);
+    });
+</script>
 
 {% endblock %}

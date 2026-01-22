@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block header %}
-    Orders Management
+    Order Management
 {% endblock %}
 
 {% block content %}
@@ -9,104 +9,162 @@
 <style>
     /* Filter Bar Styles */
     .filter-container {
-        background: white; padding: 20px; border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 25px;
-        display: flex; flex-wrap: wrap; gap: 15px; align-items: center; border: 1px solid #eee;
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        align-items: center;
+        flex-wrap: wrap;
     }
-    .filter-group { display: flex; flex-direction: column; gap: 5px; }
-    .filter-label { font-size: 12px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; }
-    .filter-input, .filter-select { padding: 10px 12px; border: 1px solid #dcdcdc; border-radius: 6px; font-size: 14px; min-width: 150px; }
-    .btn-filter { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; }
-    .btn-reset { background-color: #ecf0f1; color: #7f8c8d; border: 1px solid #bdc3c7; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; text-decoration: none; display: flex; align-items: center; }
     
-    /* High Contrast Badges */
-    .badge {
-        padding: 6px 12px; border-radius: 20px; font-weight: 700; font-size: 12px;
-        text-transform: uppercase; display: inline-block; letter-spacing: 0.5px;
-        color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    .search-input {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #dfe6e9;
+        border-radius: 6px;
+        min-width: 200px;
     }
-    .badge-Pending { background-color: #f39c12; }
-    .badge-Invoiced { background-color: #27ae60; }
+    
+    .filter-select {
+        padding: 10px;
+        border: 1px solid #dfe6e9;
+        border-radius: 6px;
+        background: white;
+        min-width: 150px;
+    }
+    
+    .btn-filter {
+        padding: 10px 20px;
+        background-color: #34495e;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .btn-filter:hover { background-color: #2c3e50; }
+
+    /* Table Styles */
+    .order-table {
+        width: 100%;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border-collapse: collapse;
+        overflow: hidden;
+    }
+    
+    .order-table th { background-color: #f8f9fa; color: #2d3436; font-weight: 700; padding: 15px; text-align: left; border-bottom: 2px solid #dfe6e9; }
+    .order-table td { padding: 15px; border-bottom: 1px solid #f1f2f6; color: #636e72; vertical-align: middle; }
+    .order-table tr:hover { background-color: #fcfcfc; }
+    
+    /* UPDATED COLORS: Deeper contrast, but not too intense */
+    .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+    
+    .status-Pending { 
+        background-color: #ffe082; /* Deeper Amber/Yellow */
+        color: #5d4037;            /* Dark Brown Text */
+    }
+    
+    .status-Invoiced { 
+        background-color: #a5d6a7; /* Deeper Soft Green */
+        color: #1b5e20;            /* Dark Green Text */
+    }
+
+    /* Action Buttons - Clean & Inline */
+    .btn-action {
+        padding: 6px 12px;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 13px;
+        font-weight: 600;
+        transition: 0.2s;
+        display: inline-block;
+        white-space: nowrap; 
+    }
+    
+    .btn-gen { background-color: #0984e3; color: white; }
+    .btn-gen:hover { background-color: #00cec9; }
+    
+    .btn-view { background-color: #636e72; color: white; }
+    .btn-view:hover { background-color: #2d3436; }
+
+    /* Centered Actions Column */
+    .col-actions { 
+        width: 1%; 
+        white-space: nowrap; 
+        text-align: center; /* Added to center buttons */
+    }
 </style>
 
-<form method="GET" action="{{ url_for('orders') }}" class="filter-container">
-    <div class="filter-group" style="flex: 1; min-width: 250px;">
-        <label class="filter-label">Search</label>
-        <input type="text" name="search" class="filter-input" placeholder="ORD-2025..., Client, Desc..." value="{{ request.args.get('search', '') }}">
-    </div>
-    <div class="filter-group">
-        <label class="filter-label">Invoice Status</label>
+<div class="filter-container">
+    <form method="GET" action="{{ url_for('orders') }}" style="display: flex; gap: 15px; width: 100%;">
+        <input type="text" name="search" class="search-input" placeholder="Search Client, Description or Order ID..." value="{{ request.args.get('search', '') }}">
+        
         <select name="status" class="filter-select">
-            <option value="All" {% if request.args.get('status') == 'All' %}selected{% endif %}>All Orders</option>
+            <option value="All">All Statuses</option>
             <option value="Pending" {% if request.args.get('status') == 'Pending' %}selected{% endif %}>Pending</option>
             <option value="Invoiced" {% if request.args.get('status') == 'Invoiced' %}selected{% endif %}>Invoiced</option>
         </select>
-    </div>
-    <div class="filter-group">
-        <label class="filter-label">Sort By</label>
+
         <select name="sort" class="filter-select">
             <option value="date_desc" {% if request.args.get('sort') == 'date_desc' %}selected{% endif %}>Newest First</option>
             <option value="date_asc" {% if request.args.get('sort') == 'date_asc' %}selected{% endif %}>Oldest First</option>
-            <option value="price_high" {% if request.args.get('sort') == 'price_high' %}selected{% endif %}>Price: High to Low</option>
-            <option value="price_low" {% if request.args.get('sort') == 'price_low' %}selected{% endif %}>Price: Low to High</option>
+            <option value="price_high" {% if request.args.get('sort') == 'price_high' %}selected{% endif %}>Highest Amount</option>
+            <option value="price_low" {% if request.args.get('sort') == 'price_low' %}selected{% endif %}>Lowest Amount</option>
         </select>
-    </div>
-    <button type="submit" class="btn-filter"><i class="fa-solid fa-filter"></i> Apply</button>
-    <a href="{{ url_for('orders') }}" class="btn-reset">Reset</a>
-</form>
-
-<div class="card">
-    <div class="table-container">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Order ID</th>
-                    <th>Client</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                    <th>Date Placed</th>
-                    <th style="text-align: center;">Status</th>
-                    <th style="text-align: center;">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for order in orders %}
-                <tr>
-                    <td style="font-family: monospace; font-weight: bold; color: #555;">{{ order.order_code }}</td>
-                    <td><strong>{{ order.client.name }}</strong><br><span style="font-size:12px; color:#999;">{{ order.client.company }}</span></td>
-                    <td>{{ order.description }}</td>
-                    <td style="font-weight: bold;">${{ "%.2f"|format(order.amount) }}</td>
-                    <td>{{ order.date_placed.strftime('%Y-%m-%d') }}</td>
-                    
-                    <td style="text-align: center;">
-                        <span class="badge badge-{{ order.status }}">{{ order.status }}</span>
-                    </td>
-                    
-                    <td style="text-align: center;">
-                        {% if order.status == 'Pending' %}
-                            {% if g.user.role != 'Staff' %}
-                                <a href="{{ url_for('create_invoice', order_id=order.id) }}" class="btn btn-success btn-sm">
-                                    Generate Invoice
-                                </a>
-                            {% else %}
-                                <span style="color: #ccc; font-size: 13px;">View Only</span>
-                            {% endif %}
-                        {% else %}
-                            {% if order.invoice %}
-                                <a href="{{ url_for('view_invoice', invoice_id=order.invoice.id) }}" class="btn btn-secondary btn-sm">
-                                    View Invoice
-                                </a>
-                            {% else %}
-                                <span style="color: #aaa; font-size: 13px;">Processed</span>
-                            {% endif %}
-                        {% endif %}
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="7" style="text-align: center; padding: 30px; color: #7f8c8d;">No orders found matching your criteria.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
+        
+        <button type="submit" class="btn-filter">Filter</button>
+    </form>
 </div>
+
+<table class="order-table">
+    <thead>
+        <tr>
+            <th>Order ID</th>
+            <th>Client</th>
+            <th>Description</th>
+            <th>Date</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th class="col-actions">Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for order in orders %}
+        <tr>
+            <td><span style="font-weight: bold; color: #2c3e50;">{{ order.order_code }}</span></td>
+            <td>
+                <div style="font-weight: bold;">{{ order.client.name }}</div>
+                <div style="font-size: 12px; color: #b2bec3;">{{ order.client.company }}</div>
+            </td>
+            <td>{{ order.description }}</td>
+            <td>{{ order.date_placed.strftime('%Y-%m-%d') }}</td>
+            <td style="font-weight: bold;">${{ "%.2f"|format(order.amount) }}</td>
+            <td><span class="status-badge status-{{ order.status }}">{{ order.status }}</span></td>
+            <td class="col-actions">
+                {% if order.status == 'Pending' %}
+                    {% if g.user.role != 'Staff' %}
+                        <a href="{{ url_for('create_invoice', order_id=order.id) }}" class="btn-action btn-gen">Generate Invoice</a>
+                    {% else %}
+                        <span style="font-size: 12px; color: #ccc;">Staff Read-Only</span>
+                    {% endif %}
+                {% elif order.invoice %}
+                    <a href="{{ url_for('view_invoice', invoice_id=order.invoice.id) }}" class="btn-action btn-view">View Invoice</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="7" style="text-align: center; padding: 30px; color: #999;">
+                No orders found matching your criteria.
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
 {% endblock %}

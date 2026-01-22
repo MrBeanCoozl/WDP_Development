@@ -61,6 +61,15 @@ class Order(db.Model):
     status = db.Column(db.String(50), default='Pending') 
     
     client = db.relationship('Client', backref=db.backref('orders', lazy=True))
+    items = db.relationship('OrderItem', backref='order', lazy=True, cascade="all, delete-orphan")
+
+class OrderItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    item_name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, default=1)
+    unit_price = db.Column(db.Float, nullable=False)
+    total_price = db.Column(db.Float, nullable=False)
 
 class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -258,8 +267,12 @@ def create_invoice(order_id):
     order = Order.query.get_or_404(order_id)
     if request.method == 'POST':
         try:
-            new_code = f"INV-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
-            new_invoice = Invoice(invoice_code=new_code, order_id=order.id, client_id=order.client_id, amount=order.amount, status='Pending', date_due=datetime.utcnow() + timedelta(days=30))
+            # UNIQUE ID CHECK FOR NEW INVOICE
+            while True:
+                new_code = f"INV-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
+                if not Invoice.query.filter_by(invoice_code=new_code).first(): break
+
+            new_invoice = Invoice(invoice_code=new_code, order_id=order.id, client_id=order.client_id, amount=order.amount, status='Sent', date_due=datetime.utcnow() + timedelta(days=30))
             db.session.add(new_invoice)
             order.status = 'Invoiced'
             db.session.commit()
@@ -563,6 +576,7 @@ def danger_zone():
         if action == 'wipe':
             try:
                 Invoice.query.delete()
+                OrderItem.query.delete()
                 Order.query.delete()
                 Client.query.delete()
                 AuditLog.query.delete()
@@ -642,27 +656,90 @@ def generate_bulk_data():
             clients.append(c)
         else: clients.append(exists)
     db.session.commit()
+    
+    # Define Item Names and their Price Ranges (Min, Max)
+    item_definitions = [
+        ("Cotton Crew Neck T-Shirt", 15, 35),
+        ("Slim Fit Denim Jeans", 50, 150),
+        ("Silk Floral Scarf", 30, 80),
+        ("Leather Biker Jacket", 150, 450),
+        ("Summer Breeze Sundress", 40, 90),
+        ("Canvas Low-Top Sneakers", 30, 80),
+        ("Classic Oxford Shirt", 40, 100),
+        ("Wool Blend Coat", 120, 300),
+        ("Athletic Running Shorts", 20, 50),
+        ("Knitted Sweater", 60, 140),
+        ("Designer Sunglasses", 80, 250),
+        ("Formal Leather Belt", 25, 70),
+        ("Ankle Boots", 80, 180),
+        ("Casual Hoodie", 35, 85),
+        ("Pleated Midi Skirt", 45, 95),
+        ("Graphic Print Tee", 20, 45),
+        ("Chino Trousers", 45, 90)
+    ]
+    
+    # Cents variants for realistic pricing
+    cents_options = [0.00, 0.50, 0.90, 0.95, 0.99, 0.25, 0.75, 0.55, 0.45]
 
-    descriptions = ["Summer Collection Shipment", "Bulk T-Shirts Printing", "Winter Coats Manufacturing", "Silk Scarf Production", "Denim Jeans Supply", "Fashion Photoshoot Styling", "Runway Accessories", "Custom Embroidery Service", "Leather Jacket Order", "Sustainable Cotton Fabrics", "Activewear Line Launch", "Vintage Dress Restoration"]
     start_date = datetime.now() - timedelta(days=730) 
     end_date = datetime.now()
+    
     for _ in range(150): 
         days_between = (end_date - start_date).days
         order_date = start_date + timedelta(days=random.randrange(days_between))
         client = random.choice(clients)
-        desc = random.choice(descriptions)
-        amount = random.uniform(500, 4000)
+        
+        # 40% chance of single item, 60% chance of multi-item (2-6 items)
+        if random.random() < 0.4:
+            num_items = 1
+        else:
+            num_items = random.randint(2, 6)
+        
+        order_items_data = []
+        total_amount = 0
+        
+        for _ in range(num_items):
+            base_name, min_p, max_p = random.choice(item_definitions)
+            
+            # Generate random price within range + realistic cents ending
+            dollars = random.randint(min_p, max_p)
+            cents = random.choice(cents_options)
+            unit_price = dollars + cents
+            
+            qty = random.randint(1, 12)
+            line_total = round(qty * unit_price, 2)
+            
+            total_amount += line_total
+            order_items_data.append({'name': base_name, 'qty': qty, 'price': unit_price, 'total': line_total})
+            
+        desc = f"Bulk Order - {num_items} Items" if num_items > 1 else order_items_data[0]['name']
         status = 'Invoiced' if random.random() > 0.3 else 'Pending'
-        code = f"ORD-{order_date.strftime('%Y%m')}-{random.randint(1000,9999)}"
-        o = Order(order_code=code, client_id=client.id, description=desc, amount=amount, date_placed=order_date, status=status)
+
+        # UNIQUE ORDER CODE CHECK
+        while True:
+            code = f"ORD-{order_date.strftime('%Y%m')}-{random.randint(1000,99999)}"
+            if not Order.query.filter_by(order_code=code).first(): break
+        
+        o = Order(order_code=code, client_id=client.id, description=desc, amount=total_amount, date_placed=order_date, status=status)
         db.session.add(o)
         db.session.commit()
+        
+        # Create Items
+        for item in order_items_data:
+            oi = OrderItem(order_id=o.id, item_name=item['name'], quantity=item['qty'], unit_price=item['price'], total_price=item['total'])
+            db.session.add(oi)
+            
         if status == 'Invoiced':
-            inv_code = f"INV-{order_date.strftime('%Y%m')}-{random.randint(1000,9999)}"
-            inv = Invoice(invoice_code=inv_code, order_id=o.id, client_id=client.id, amount=amount, status='Paid', date_created=order_date, date_due=order_date)
+            # UNIQUE INVOICE CODE CHECK
+            while True:
+                inv_code = f"INV-{order_date.strftime('%Y%m')}-{random.randint(1000,99999)}"
+                if not Invoice.query.filter_by(invoice_code=inv_code).first(): break
+            
+            inv = Invoice(invoice_code=inv_code, order_id=o.id, client_id=client.id, amount=total_amount, status='Paid', date_created=order_date, date_due=order_date)
             db.session.add(inv)
+            
     db.session.commit()
-    flash("Success! Added 150+ fashion-related mock orders with Proper IDs.")
+    flash("Success! Added 150+ realistic fashion orders with varied items and pricing.")
     return redirect(url_for('dashboard'))
 
 @app.route('/guide')
