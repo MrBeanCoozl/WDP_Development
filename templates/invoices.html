@@ -7,74 +7,22 @@
 {% block content %}
 
 <style>
-    /* Filter Bar Styles */
-    .filter-container {
-        background: white; padding: 20px; border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 25px;
-        display: flex; flex-wrap: wrap; gap: 15px; align-items: center; border: 1px solid #eee;
-    }
+    .filter-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 25px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; border: 1px solid #eee; }
     .filter-group { display: flex; flex-direction: column; gap: 5px; }
     .filter-label { font-size: 12px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; }
     .filter-input, .filter-select { padding: 10px 12px; border: 1px solid #dcdcdc; border-radius: 6px; font-size: 14px; min-width: 150px; }
     .btn-filter { background-color: #34495e; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; }
-    .btn-filter:hover { background-color: #2c3e50; }
     .btn-reset { background-color: #ecf0f1; color: #7f8c8d; border: 1px solid #bdc3c7; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; text-decoration: none; display: flex; align-items: center; }
-    
-    /* Table Styles (Matched to Orders) */
-    .table-container {
-        background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden;
-    }
-    .table {
-        width: 100%; border-collapse: collapse;
-    }
+    .table-container { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
+    .table { width: 100%; border-collapse: collapse; }
     .table th { background-color: #f8f9fa; color: #2d3436; font-weight: 700; padding: 15px; text-align: left; border-bottom: 2px solid #dfe6e9; }
     .table td { padding: 15px; border-bottom: 1px solid #f1f2f6; color: #636e72; vertical-align: middle; }
-    .table tr:hover { background-color: #fcfcfc; }
-
-    /* High Contrast Badges (Standardized Scheme) */
-    .badge {
-        padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold;
-        text-transform: uppercase; display: inline-block;
-    }
-    
-    /* Matches 'Invoiced' from Orders */
-    .badge-Paid { 
-        background-color: #a5d6a7; /* Deeper Soft Green */
-        color: #1b5e20;            /* Dark Green Text */
-    }
-    
-    /* Matches 'Pending' from Orders */
-    .badge-Pending { 
-        background-color: #ffe082; /* Deeper Amber */
-        color: #5d4037;            /* Dark Brown Text */
-    }
-    
-    /* Blue Adjusted for Contrast */
-    .badge-Sent { 
-        background-color: #90caf9; /* Soft Blue */
-        color: #0d47a1;            /* Dark Blue Text */
-    }
-    
-    /* Red Adjusted for Contrast */
-    .badge-Overdue { 
-        background-color: #ef9a9a; /* Soft Red */
-        color: #b71c1c;            /* Dark Red Text */
-    }
-    
-    /* Grey Adjusted for Contrast */
-    .badge-Draft { 
-        background-color: #cfd8dc; /* Soft Blue Grey */
-        color: #37474f;            /* Dark Grey Text */
-    }
-
-    /* Action Buttons */
-    .btn-view { 
-        padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 600;
-        transition: 0.2s; display: inline-block;
-        background-color: #636e72; color: white; 
-    }
-    .btn-view:hover { background-color: #2d3436; }
-
+    .badge { padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; text-transform: uppercase; display: inline-block; }
+    .badge-Paid { background-color: #a5d6a7; color: #1b5e20; }
+    .badge-Pending { background-color: #ffe082; color: #5d4037; }
+    .badge-Sent { background-color: #90caf9; color: #0d47a1; }
+    .badge-Overdue { background-color: #ef9a9a; color: #b71c1c; }
+    .btn-view { padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 600; background-color: #636e72; color: white; }
 </style>
 
 <form method="GET" action="{{ url_for('invoices') }}" class="filter-container">
@@ -119,22 +67,18 @@
             </tr>
         </thead>
         <tbody>
-            {% for invoice in invoices %}
+            {% for invoice in invoices.items %}
             <tr>
                 <td style="font-weight: bold; color: #2c3e50;">{{ invoice.invoice_code }}</td>
                 <td>{{ invoice.client.name }}</td>
                 <td style="font-weight: bold;">${{ "%.2f"|format(invoice.amount) }}</td>
                 <td>{{ invoice.date_created.strftime('%Y-%m-%d') }}</td>
                 <td>{{ invoice.date_due.strftime('%Y-%m-%d') }}</td>
-                
                 <td style="text-align: center;">
                     <span class="badge badge-{{ invoice.status }}">{{ invoice.status }}</span>
                 </td>
-                
                 <td style="text-align: center;">
-                    <a href="{{ url_for('view_invoice', invoice_id=invoice.id) }}" class="btn-view">
-                        View
-                    </a>
+                    <a href="{{ url_for('view_invoice', invoice_id=invoice.id) }}" class="btn-view">View</a>
                 </td>
             </tr>
             {% else %}
@@ -147,4 +91,43 @@
         </tbody>
     </table>
 </div>
+
+<div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
+    <div style="font-size: 14px; color: #7f8c8d;">
+        Showing page <strong>{{ invoices.page }}</strong> of {{ invoices.pages }}
+    </div>
+    
+    <div style="display: flex; gap: 5px;">
+        {% if invoices.has_prev %}
+            <a href="{{ url_for('invoices', page=invoices.prev_num, search=request.args.get('search', ''), status=request.args.get('status', 'All'), sort=request.args.get('sort', 'date_desc')) }}" 
+               style="padding: 8px 12px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #333; font-size: 13px;">
+               Previous
+            </a>
+        {% endif %}
+
+        {% for item in invoices | smart_pagination %}
+            {% if item.type == 'page' %}
+                <a href="{{ url_for('invoices', page=item.page, search=request.args.get('search', ''), status=request.args.get('status', 'All'), sort=request.args.get('sort', 'date_desc')) }}" 
+                   style="padding: 8px 14px; border-radius: 4px; text-decoration: none; font-size: 13px; 
+                          {{ 'background: #34495e; color: white;' if item.page == invoices.page else 'background: white; color: #333; border: 1px solid #ddd;' }}">
+                    {{ item.page }}
+                </a>
+            {% else %}
+                <a href="{{ url_for('invoices', page=item.page, search=request.args.get('search', ''), status=request.args.get('status', 'All'), sort=request.args.get('sort', 'date_desc')) }}" 
+                   title="Jump to middle (Page {{ item.page }})"
+                   style="padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; background: #f8f9fa; color: #7f8c8d; border: 1px solid #ddd;">
+                    ...
+                </a>
+            {% endif %}
+        {% endfor %}
+
+        {% if invoices.has_next %}
+            <a href="{{ url_for('invoices', page=invoices.next_num, search=request.args.get('search', ''), status=request.args.get('status', 'All'), sort=request.args.get('sort', 'date_desc')) }}" 
+               style="padding: 8px 12px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #333; font-size: 13px;">
+               Next
+            </a>
+        {% endif %}
+    </div>
+</div>
+
 {% endblock %}

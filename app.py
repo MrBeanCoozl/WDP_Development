@@ -26,7 +26,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'poolclass': NullPool
 }
 
-# --- EMAIL CONFIGURATION (YOU MUST EDIT THIS) ---
+# --- EMAIL CONFIGURATION ---
 app.config['SMTP_SERVER'] = 'smtp.gmail.com'      
 app.config['SMTP_PORT'] = 587                       
 app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'   
@@ -63,6 +63,39 @@ def add_skipped_days(days):
 
 def reset_skipped_days():
     with open(OFFSET_FILE, 'w') as f: json.dump({'days_skipped': 0}, f)
+
+# --- SMART PAGINATION FILTER (NEW FEATURE) ---
+@app.template_filter('smart_pagination')
+def smart_pagination_filter(pagination):
+    """
+    Generates a list of page items. 
+    If there is a gap, it creates a 'gap' item with the midpoint page number.
+    """
+    if not pagination: return []
+    
+    # Standard iteration: 1 edge, 2 around current
+    iterator = pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2)
+    
+    result = []
+    last_page = 0
+    gap_marker = False
+    
+    if iterator:
+        for num in iterator:
+            if num is None:
+                gap_marker = True
+            else:
+                if gap_marker:
+                    # CALCULATE MIDPOINT (Average)
+                    # Example: Last=1, Current=10. Gap is 2..9. Midpoint = (1+10)//2 = 5.
+                    midpoint = (last_page + num) // 2
+                    result.append({'type': 'gap', 'page': midpoint})
+                    gap_marker = False
+                
+                result.append({'type': 'page', 'page': num})
+                last_page = num
+                
+    return result
 
 # --- 2. DATABASE MODELS ---
 
@@ -299,6 +332,7 @@ def change_password():
 def orders():
     if 'user_id' not in session: return redirect(url_for('login'))
     
+    page = request.args.get('page', 1, type=int)
     search_q = request.args.get('search', '')
     status_filter = request.args.get('status', 'All')
     sort_by = request.args.get('sort', 'date_desc')
@@ -318,22 +352,19 @@ def orders():
     if status_filter != 'All':
         query = query.filter(Order.status == status_filter)
 
-    if sort_by == 'price_high':
-        query = query.order_by(Order.amount.desc())
-    elif sort_by == 'price_low':
-        query = query.order_by(Order.amount.asc())
-    elif sort_by == 'date_asc':
-        query = query.order_by(Order.date_placed.asc())
-    else: 
-        query = query.order_by(Order.date_placed.desc())
+    if sort_by == 'price_high': query = query.order_by(Order.amount.desc())
+    elif sort_by == 'price_low': query = query.order_by(Order.amount.asc())
+    elif sort_by == 'date_asc': query = query.order_by(Order.date_placed.asc())
+    else: query = query.order_by(Order.date_placed.desc())
 
-    orders = query.all()
-    return render_template('orders.html', orders=orders)
+    orders_pagination = query.paginate(page=page, per_page=10, error_out=False)
+    return render_template('orders.html', orders=orders_pagination)
 
 @app.route('/invoices', methods=['GET'])
 def invoices():
     if 'user_id' not in session: return redirect(url_for('login'))
     
+    page = request.args.get('page', 1, type=int)
     today = datetime.now().date()
     overdue_invoices = Invoice.query.filter(
         or_(Invoice.status == 'Pending', Invoice.status == 'Sent'), 
@@ -364,8 +395,8 @@ def invoices():
     elif sort_by == 'date_asc': query = query.order_by(Invoice.date_created.asc())
     else: query = query.order_by(Invoice.date_created.desc())
 
-    invoices = query.all()
-    return render_template('invoices.html', invoices=invoices)
+    invoices_pagination = query.paginate(page=page, per_page=10, error_out=False)
+    return render_template('invoices.html', invoices=invoices_pagination)
 
 @app.route('/invoices/create/<int:order_id>', methods=['GET', 'POST'])
 @operator_required
@@ -373,7 +404,6 @@ def create_invoice(order_id):
     order = Order.query.get_or_404(order_id)
     if request.method == 'POST':
         try:
-            # UNIQUE ID CHECK FOR NEW INVOICE
             while True:
                 new_code = f"INV-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
                 if not Invoice.query.filter_by(invoice_code=new_code).first(): break
@@ -446,7 +476,6 @@ def delete_invoice(invoice_id):
         db.session.rollback()
         return redirect(url_for('error_page'))
 
-# --- DASHBOARD (RESTORED FULL LOGIC) ---
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -544,12 +573,13 @@ def dashboard():
 @app.route('/audit')
 def audit_log():
     if 'user_id' not in session: return redirect(url_for('login'))
+    
+    page = request.args.get('page', 1, type=int)
     search_q = request.args.get('q', '')
     action_filter = request.args.get('action_type', '')
     
     query = AuditLog.query
     
-    # 1. UNIVERSAL SEARCH
     if search_q:
         search_term = f"%{search_q}%"
         query = query.filter(
@@ -557,21 +587,20 @@ def audit_log():
                 AuditLog.description.like(search_term),
                 AuditLog.action.like(search_term),
                 AuditLog.actor_id.like(search_term),
-                AuditLog.actor_type.like(search_term), # Added Actor Type (SuperAdmin)
+                AuditLog.actor_type.like(search_term),
                 AuditLog.entity_id.like(search_term),
-                AuditLog.entity_type.like(search_term), # Added Entity Type (User, Invoice)
+                AuditLog.entity_type.like(search_term),
                 AuditLog.status.like(search_term),
-                func.cast(AuditLog.timestamp, db.String).like(search_term) # Added Timestamp
+                func.cast(AuditLog.timestamp, db.String).like(search_term)
             )
         )
         
-    # 2. FILTER
     if action_filter and action_filter != 'All':
         query = query.filter(AuditLog.action == action_filter)
         
-    logs = query.order_by(AuditLog.timestamp.desc()).all()
+    logs_pagination = query.order_by(AuditLog.timestamp.desc()).paginate(page=page, per_page=10, error_out=False)
     unique_actions = [r.action for r in db.session.query(AuditLog.action).distinct()]
-    return render_template('audit_log.html', logs=logs, unique_actions=unique_actions)
+    return render_template('audit_log.html', logs=logs_pagination, unique_actions=unique_actions)
 
 @app.route('/audit/view/<int:log_id>')
 def audit_details(log_id):
