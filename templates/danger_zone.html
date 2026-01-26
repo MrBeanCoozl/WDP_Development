@@ -6,6 +6,17 @@
 
 {% block content %}
 
+<style>
+    /* --- STANDARDIZED MODAL STYLES --- */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+    .modal-content { background-color: white; padding: 30px; border-radius: 12px; width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); animation: fadeIn 0.2s ease-out; }
+    .modal-icon { font-size: 50px; color: #e74c3c; margin-bottom: 15px; }
+    .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 25px; }
+    .btn-cancel { background-color: #95a5a6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    .btn-confirm-delete { background-color: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
 <div class="card" style="max-width: 600px; margin: 30px auto; text-align: center; border: 2px solid #e74c3c;">
     
     <div style="font-size: 60px; color: #e74c3c; margin-bottom: 20px;">
@@ -39,6 +50,26 @@
         </form>
     </div>
 
+    <div style="background: #e8f8f5; border: 1px solid #a2d9ce; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: left;">
+        <h3 style="margin-top: 0; color: #16a085;"><i class="fa-solid fa-envelope"></i> Mandatory Email Setup</h3>
+        <p style="font-size: 14px; margin-bottom: 15px;">
+            Require users to link an email address when setting up their password?
+        </p>
+        
+        <form method="POST">
+            <input type="hidden" name="action" value="toggle_email_req">
+            {% if email_required %}
+                <button type="submit" class="btn btn-secondary" style="width: 100%; background-color: #7f8c8d; border: none;">
+                    <i class="fa-solid fa-toggle-off"></i> Disable Requirement (Optional Email)
+                </button>
+            {% else %}
+                <button type="submit" class="btn btn-success" style="width: 100%; background-color: #27ae60; border: none;">
+                    <i class="fa-solid fa-toggle-on"></i> Enable Requirement (Mandatory Email)
+                </button>
+            {% endif %}
+        </form>
+    </div>
+
     <div style="background: #fff8e1; border: 1px solid #ffe0b2; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: left;">
         <h3 style="margin-top: 0; color: #e67e22;"><i class="fa-solid fa-clock-rotate-left"></i> Time Travel (Testing)</h3>
         
@@ -54,9 +85,7 @@
         <form method="POST" style="display: flex; gap: 10px; margin-bottom: 20px;">
             <input type="hidden" name="action" value="time_skip">
             <input type="number" name="days" placeholder="Days to skip" required style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 180px;">
-            <button type="submit" class="btn btn-warning">
-                Skip Time
-            </button>
+            <button type="submit" class="btn btn-warning">Skip Time</button>
         </form>
 
         <form method="POST">
@@ -70,22 +99,39 @@
     <div style="background: #ffe3e3; border: 1px solid #f5c6cb; padding: 20px; border-radius: 8px; text-align: left;">
         <h3 style="margin-top: 0; color: #c0392b;"><i class="fa-solid fa-trash-can"></i> Hard System Reset</h3>
         <p style="font-size: 14px; margin-bottom: 15px;">
-            Wipe all <strong>Business Data</strong> (Clients, Orders, Invoices, Logs). Admin accounts are NOT deleted.
+            Wipe all <strong>Business Data</strong>. This cannot be undone.
         </p>
-        <form method="POST">
-            <input type="hidden" name="action" value="wipe">
-            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you 100% sure? This data is gone forever.');" style="width: 100%;">
-                Yes, Wipe Everything
-            </button>
-        </form>
+        <button type="button" class="btn btn-danger" onclick="openWipeModal()" style="width: 100%;">
+            Yes, Wipe Everything
+        </button>
     </div>
 
     <div style="margin-top: 30px;">
-        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
-            Cancel & Return to Safety
-        </a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancel & Return to Safety</a>
     </div>
-
 </div>
+
+<div id="wipeModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h3>Wipe System Data?</h3>
+        <p>This will delete <strong>EVERYTHING</strong>.</p>
+        <p style="font-size: 12px; color: #7f8c8d;">Clients, Orders, Invoices, and Logs will be lost forever.</p>
+        
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeWipeModal()">Cancel</button>
+            <form method="POST">
+                <input type="hidden" name="action" value="wipe">
+                <button type="submit" class="btn-confirm-delete">Yes, Wipe Everything</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openWipeModal() { document.getElementById('wipeModal').style.display = 'flex'; }
+    function closeWipeModal() { document.getElementById('wipeModal').style.display = 'none'; }
+    window.onclick = function(e) { if(e.target == document.getElementById('wipeModal')) closeWipeModal(); }
+</script>
 
 {% endblock %}

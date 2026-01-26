@@ -46,8 +46,29 @@
     .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
     .invoice-table th { background: #f8f9fa; color: #333; font-weight: bold; padding: 15px; text-align: left; border-bottom: 2px solid #ddd; }
     .invoice-table td { padding: 15px; border-bottom: 1px solid #eee; }
-    .invoice-table .total-row td { border-top: 2px solid #3498db; font-weight: bold; font-size: 18px; color: #2c3e50; }
+    
+    /* Specific row styling */
     .invoice-table .item-row:hover { background-color: #f9f9f9; }
+    
+    /* Spacer Row */
+    .spacer-row td { border: none; padding: 20px 0; }
+
+    /* Extras Row (GST/Shipping) */
+    .extras-row td { 
+        padding: 10px 15px; 
+        border-bottom: 1px solid #eee; 
+        color: #7f8c8d;
+    }
+    .extras-label { font-weight: bold; text-align: right; }
+
+    /* Total Row */
+    .invoice-table .total-row td { 
+        border-top: 2px solid #3498db; 
+        font-weight: bold; 
+        font-size: 18px; 
+        color: #2c3e50; 
+        padding-top: 20px;
+    }
     
     .invoice-footer { text-align: center; margin-top: 50px; font-size: 12px; color: #aaa; border-top: 1px solid #eee; padding-top: 20px; }
     
@@ -120,16 +141,34 @@
         </thead>
         <tbody>
             {% if invoice.order.items %}
+                
+                {# 1. Loop for Standard Items (Exclude GST and Shipping) #}
                 {% for item in invoice.order.items %}
-                <tr class="item-row">
-                    <td>
-                        <strong>{{ item.item_name }}</strong>
-                    </td>
-                    <td style="text-align: center;">{{ item.quantity }}</td>
-                    <td style="text-align: right;">${{ "%.2f"|format(item.unit_price) }}</td>
-                    <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
-                </tr>
+                    {% if 'Shipping' not in item.item_name and 'GST' not in item.item_name %}
+                    <tr class="item-row">
+                        <td>
+                            <strong>{{ item.item_name }}</strong>
+                        </td>
+                        <td style="text-align: center;">{{ item.quantity }}</td>
+                        <td style="text-align: right;">${{ "%.2f"|format(item.unit_price) }}</td>
+                        <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
+                    </tr>
+                    {% endif %}
                 {% endfor %}
+
+                {# 2. Spacer Row #}
+                <tr class="spacer-row"><td colspan="4"></td></tr>
+
+                {# 3. Loop for Extras (Shipping and GST Only) #}
+                {% for item in invoice.order.items %}
+                    {% if 'Shipping' in item.item_name or 'GST' in item.item_name %}
+                    <tr class="extras-row">
+                        <td colspan="3" class="extras-label">{{ item.item_name }}:</td>
+                        <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
+                    </tr>
+                    {% endif %}
+                {% endfor %}
+
             {% else %}
                 <tr class="item-row">
                     <td colspan="3">
@@ -139,6 +178,7 @@
                     <td style="text-align: right;">${{ "%.2f"|format(invoice.amount) }}</td>
                 </tr>
             {% endif %}
+
             <tr class="total-row">
                 <td colspan="3" style="text-align: right; border:none;">Total Amount:</td>
                 <td style="text-align: right;">${{ "%.2f"|format(invoice.amount) }}</td>
@@ -161,7 +201,7 @@
         <a href="{{ url_for('edit_invoice', invoice_id=invoice.id) }}" class="btn btn-primary">
             <i class="fa-solid fa-pen-to-square"></i> Edit
         </a>
-        <button onclick="window.print()" class="btn btn-print">
+        <button onclick="printInvoice()" class="btn btn-print">
             <i class="fa-solid fa-print"></i> Print / PDF
         </button>
         <form id="deleteForm" action="{{ url_for('delete_invoice', invoice_id=invoice.id) }}" method="POST" style="display: inline;">
@@ -170,7 +210,7 @@
             </button>
         </form>
     {% else %}
-        <button onclick="window.print()" class="btn btn-print">
+        <button onclick="printInvoice()" class="btn btn-print">
             <i class="fa-solid fa-print"></i> Print / PDF
         </button>
     {% endif %}
@@ -189,6 +229,23 @@
 </div>
 
 <script>
+    function printInvoice() {
+        const originalTitle = document.title;
+        document.title = "{{ invoice.invoice_code }}"; // Set filename for download
+
+        // Log the download action
+        fetch("{{ url_for('log_invoice_download', invoice_id=invoice.id) }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).catch(err => console.error("Logging failed", err));
+
+        window.print();
+
+        setTimeout(() => { document.title = originalTitle; }, 1000);
+    }
+
     function showDeleteModal() { document.getElementById('deleteModal').style.display = 'flex'; }
     function hideDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
     function confirmDelete() { document.getElementById('deleteForm').submit(); }

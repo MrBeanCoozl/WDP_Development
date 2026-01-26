@@ -132,6 +132,19 @@
     .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
     .invoice-table th { background: #f8f9fa; color: #333; font-weight: bold; padding: 10px; text-align: left; border-bottom: 2px solid #ddd; }
     .invoice-table td { padding: 10px; border-bottom: 1px solid #eee; }
+    
+    /* --- NEW PREVIEW TABLE STYLES --- */
+    /* Spacer Row */
+    .spacer-row td { border: none; padding: 20px 0; }
+
+    /* Extras Row (GST/Shipping) */
+    .extras-row td { 
+        padding: 10px 15px; 
+        border-bottom: 1px solid #eee; 
+        color: #7f8c8d;
+    }
+    .extras-label { font-weight: bold; text-align: right; }
+
     .invoice-table .total-row td { border-top: 2px solid #3498db; font-weight: bold; font-size: 16px; color: #2c3e50; }
     
     .invoice-footer { text-align: center; margin-top: 30px; font-size: 11px; color: #aaa; border-top: 1px solid #eee; padding-top: 15px; }
@@ -229,16 +242,34 @@
                 </thead>
                 <tbody>
                     {% if order.items %}
+                        
+                        {# 1. Loop for Standard Items (Exclude GST and Shipping) #}
                         {% for item in order.items %}
-                        <tr>
-                            <td>
-                                <strong>{{ item.item_name }}</strong>
-                            </td>
-                            <td style="text-align: center;">{{ item.quantity }}</td>
-                            <td style="text-align: right;">${{ "%.2f"|format(item.unit_price) }}</td>
-                            <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
-                        </tr>
+                            {% if 'Shipping' not in item.item_name and 'GST' not in item.item_name %}
+                            <tr>
+                                <td>
+                                    <strong>{{ item.item_name }}</strong>
+                                </td>
+                                <td style="text-align: center;">{{ item.quantity }}</td>
+                                <td style="text-align: right;">${{ "%.2f"|format(item.unit_price) }}</td>
+                                <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
+                            </tr>
+                            {% endif %}
                         {% endfor %}
+
+                        {# 2. Spacer Row #}
+                        <tr class="spacer-row"><td colspan="4"></td></tr>
+
+                        {# 3. Loop for Extras (Shipping and GST Only) #}
+                        {% for item in order.items %}
+                            {% if 'Shipping' in item.item_name or 'GST' in item.item_name %}
+                            <tr class="extras-row">
+                                <td colspan="3" class="extras-label">{{ item.item_name }}:</td>
+                                <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
+                            </tr>
+                            {% endif %}
+                        {% endfor %}
+
                     {% else %}
                         <tr>
                             <td colspan="3">

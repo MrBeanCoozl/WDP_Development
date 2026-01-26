@@ -9,8 +9,8 @@ import random
 import os
 import json
 import smtplib
-import re  # For password validation
-import traceback # For error logging
+import re
+import traceback
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -23,32 +23,55 @@ db_path = os.path.join(basedir, 'business_data.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# --- FIX: PREVENT DATABASE TIMEOUTS ---
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'poolclass': NullPool
 }
 
 # --- EMAIL CONFIGURATION ---
-app.config['SMTP_SERVER'] = 'smtp.gmail.com'      
-app.config['SMTP_PORT'] = 587                       
-app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'   
-app.config['SMTP_PASSWORD'] = 'iilv ertj fvps wyai'   
+app.config['SMTP_SERVER'] = 'smtp.gmail.com'
+app.config['SMTP_PORT'] = 587
+# .strip() added to remove any accidental whitespace from copy-pasting
+app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'.strip()
+app.config['SMTP_PASSWORD'] = 'xfxx kqbw mrsv wsvc'.strip()
 
 db = SQLAlchemy(app)
 
-# --- SYSTEM SETTINGS (Password Visibility) ---
+# --- CONFIG CONSTANTS ---
+MAX_LOGIN_ATTEMPTS = 5
+
+# --- SYSTEM SETTINGS ---
 SETTINGS_FILE = os.path.join(basedir, 'system_settings.json')
+TARGETS_FILE = os.path.join(basedir, 'sales_targets.json')
 
 def get_system_settings():
-    if not os.path.exists(SETTINGS_FILE): return {'show_passwords': False}
+    default_settings = {'show_passwords': False, 'email_required': True} 
+    if not os.path.exists(SETTINGS_FILE): return default_settings
     try:
-        with open(SETTINGS_FILE, 'r') as f: return json.load(f)
-    except: return {'show_passwords': False}
+        with open(SETTINGS_FILE, 'r') as f: 
+            saved = json.load(f)
+            for k, v in default_settings.items():
+                if k not in saved: saved[k] = v
+            return saved
+    except: return default_settings
 
 def update_system_setting(key, value):
     settings = get_system_settings()
     settings[key] = value
     with open(SETTINGS_FILE, 'w') as f: json.dump(settings, f)
+
+# --- SALES TARGET HELPERS ---
+def get_sales_targets():
+    default_targets = [20000] * 12
+    if not os.path.exists(TARGETS_FILE): return default_targets
+    try:
+        with open(TARGETS_FILE, 'r') as f:
+            data = json.load(f)
+            return data.get('targets', default_targets)
+    except: return default_targets
+
+def save_sales_targets(targets):
+    with open(TARGETS_FILE, 'w') as f:
+        json.dump({'targets': targets}, f)
 
 # --- TIME TRAVEL TRACKER ---
 OFFSET_FILE = os.path.join(basedir, 'time_offset.json')
@@ -99,6 +122,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=True)
     is_suspended = db.Column(db.Boolean, default=False)
     must_change_password = db.Column(db.Boolean, default=False)
+    failed_attempts = db.Column(db.Integer, default=0) 
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -177,18 +201,21 @@ def format_k(value):
     except:
         return "Err"
 
-# --- EMAIL SENDER FUNCTION ---
+# --- EMAIL SENDER FUNCTION (FIXED & DEBUGGED) ---
 def send_temp_password_email(user_email, temp_password):
     sender_email = app.config['SMTP_EMAIL']
     sender_password = app.config['SMTP_PASSWORD']
     smtp_server = app.config['SMTP_SERVER']
     smtp_port = app.config['SMTP_PORT']
 
-    if 'your_email' in sender_email or 'your_app_password' in sender_password:
-        return False, "Simulated: Password printed to server console."
+    # 1. Validate Email Existence
+    if not user_email or "@" not in user_email:
+        print(" [ERROR] Invalid user email format.")
+        return False, "Invalid email address format."
 
-    if not user_email:
-        return False, "User has no email address saved."
+    # 2. Check for Default Credentials
+    if 'your_email' in sender_email or 'your_app_password' in sender_password:
+        return False, "System Error: Default SMTP credentials in use."
 
     msg = MIMEMultipart()
     msg['From'] = sender_email
@@ -207,15 +234,25 @@ def send_temp_password_email(user_email, temp_password):
     msg.attach(MIMEText(body, 'html'))
 
     try:
+        # 3. Connection and Auth
         server = smtplib.SMTP(smtp_server, smtp_port)
         server.starttls()
-        server.login(sender_email, sender_password)
+        
+        # CRITICAL FIX: Ensure password string has absolutely no spaces
+        clean_password = sender_password.replace(' ', '').strip()
+        
+        server.login(sender_email, clean_password)
         server.sendmail(sender_email, user_email, msg.as_string())
         server.quit()
+        
+        print(f" [SUCCESS] Email sent to {user_email}")
         return True, "Email sent successfully."
+    except smtplib.SMTPAuthenticationError:
+        print(" [ERROR] SMTP Auth Failed. Check App Password.")
+        return False, "Authentication Failed (Check Server Logs)"
     except Exception as e:
         print(f" [ERROR] EMAIL FAILED: {e}")
-        return False, f"Failed: {str(e)}"
+        return False, f"Error: {str(e)}"
 
 # --- PASSWORD VALIDATION HELPER ---
 def is_password_strong(password):
@@ -236,7 +273,7 @@ def load_user():
         try:
             g.user = User.query.get(session['user_id'])
         except:
-            session.clear() # Failsafe if user ID in session is invalid
+            session.clear() 
 
 def admin_required(f):
     @wraps(f)
@@ -256,7 +293,7 @@ def operator_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- 4. ROUTES ---
+# --- ROUTES ---
 
 @app.route('/')
 def home():
@@ -269,21 +306,50 @@ def login():
         try:
             username = request.form['username']
             password = request.form['password']
-            user = User.query.filter_by(username=username, password=password).first()
+            user = User.query.filter_by(username=username).first()
+            
             if user:
+                # 1. Check if ALREADY suspended
                 if user.is_suspended:
                     log_action('User', username, 'Login Blocked', 'Session', 'N/A', 'Failure', 'Suspended account attempted login')
-                    flash('Your account has been suspended. Please contact the Super Admin.')
+                    flash('Your account has been suspended due to security reasons. Please contact the Super Admin.', 'danger')
                     return render_template('login.html')
                 
-                session['user_id'] = user.id
-                log_action('User', username, 'Login', 'Session', 'N/A', 'Success', 'User logged in successfully')
-                
-                if user.must_change_password: return redirect(url_for('change_password'))
-                return redirect(url_for('dashboard'))
+                # 2. Check Password
+                if user.password == password:
+                    # Success: Reset counter
+                    user.failed_attempts = 0
+                    db.session.commit()
+                    
+                    session['user_id'] = user.id
+                    log_action('User', username, 'Login', 'User', user.custom_id, 'Success', 'User logged in successfully')
+                    
+                    if user.must_change_password: return redirect(url_for('change_password'))
+                    return redirect(url_for('dashboard'))
+                else:
+                    # Failure: Increment counter
+                    current_attempts = (user.failed_attempts or 0) + 1
+                    user.failed_attempts = current_attempts
+                    
+                    # 3. Check Threshold
+                    if current_attempts >= MAX_LOGIN_ATTEMPTS:
+                        user.is_suspended = True
+                        db.session.commit()
+                        
+                        log_action('System', 'Security Bot', 'Account Suspended', 'User', user.custom_id, 'Danger', f'Suspended after {current_attempts} failed login attempts')
+                        flash('Security Alert: Your account has been suspended due to too many failed attempts.', 'danger')
+                    else:
+                        attempts_left = MAX_LOGIN_ATTEMPTS - current_attempts
+                        db.session.commit()
+                        
+                        # Log User ID if username exists
+                        log_action('User', username, 'Login Failed', 'User', user.custom_id, 'Failure', f'Invalid password. {attempts_left} attempts remaining.')
+                        flash(f'Invalid credentials. {attempts_left} attempts remaining before suspension.', 'warning')
             else:
-                log_action('User', username, 'Login Failed', 'Session', 'N/A', 'Failure', 'Invalid password attempt')
+                # Unknown user (no User ID available)
+                log_action('User', username, 'Login Failed', 'Session', 'N/A', 'Failure', 'Unknown username')
                 flash('Invalid credentials')
+                
         except Exception as e:
             flash(f"System Error: {str(e)}", "danger")
     return render_template('login.html')
@@ -303,33 +369,35 @@ def change_password():
             session.clear()
             return redirect(url_for('login'))
         
+        settings = get_system_settings()
+        email_required = settings.get('email_required', True)
+
         if request.method == 'POST':
             new_pass = request.form['new_password']
             confirm_pass = request.form['confirm_password']
             email_input = request.form.get('email')
 
-            # 1. Check Matching
             if new_pass != confirm_pass:
                 flash('Passwords do not match.')
                 return redirect(url_for('change_password'))
             
-            # 2. Check Strength
             is_strong, msg = is_password_strong(new_pass)
             if not is_strong:
                 flash(f'Security Requirement: {msg}')
                 return redirect(url_for('change_password'))
             
-            # 3. Handle Email Validation with Exception Handling
             if not user.email:
-                if not email_input:
-                    flash('You must provide a recovery email address.')
-                    return redirect(url_for('change_password'))
+                if email_required: 
+                    if not email_input:
+                        flash('You must provide a recovery email address.')
+                        return redirect(url_for('change_password'))
                 
-                existing = User.query.filter(User.email == email_input, User.id != user.id).first()
-                if existing:
-                    flash('This email is already associated with another account.')
-                    return redirect(url_for('change_password'))
-                user.email = email_input
+                if email_input: 
+                    existing = User.query.filter(User.email == email_input, User.id != user.id).first()
+                    if existing:
+                        flash('This email is already associated with another account.')
+                        return redirect(url_for('change_password'))
+                    user.email = email_input
 
             user.password = new_pass
             user.must_change_password = False 
@@ -342,8 +410,8 @@ def change_password():
         db.session.rollback()
         flash(f"Error updating credentials: {str(e)}", "danger")
         return redirect(url_for('change_password'))
-        
-    return render_template('change_password.html', user=user)
+    
+    return render_template('change_password.html', user=user, email_required=email_required)
 
 @app.route('/orders')
 def orders():
@@ -352,18 +420,23 @@ def orders():
     try:
         page = request.args.get('page', 1, type=int)
         search_q = request.args.get('search', '')
-        status_filter = request.args.get('status', 'All')
+        status_filter = request.args.get('status', 'Pending')
         sort_by = request.args.get('sort', 'date_desc')
 
         query = Order.query
 
         if search_q:
-            search_term = f"%{search_q}%"
+            clean_input = search_q.strip()
+            clean_input_no_hash = clean_input.replace('#', '')
+            search_parts = clean_input_no_hash.split()
+            robust_pattern = "%" + "%".join(search_parts) + "%"
+
             query = query.join(Client).filter(
                 or_(
-                    Client.name.like(search_term),
-                    Order.description.like(search_term),
-                    Order.order_code.like(search_term)
+                    Client.name.like(robust_pattern),
+                    Client.company.like(robust_pattern), # Added Company
+                    Order.description.like(robust_pattern),
+                    Order.order_code.like(robust_pattern)
                 )
             )
 
@@ -387,8 +460,6 @@ def invoices():
     
     try:
         page = request.args.get('page', 1, type=int)
-        
-        # Safe Overdue Check
         today = datetime.now().date()
         try:
             overdue_invoices = Invoice.query.filter(
@@ -409,8 +480,18 @@ def invoices():
         query = Invoice.query
 
         if search_query:
-            search_term = f"%{search_query}%"
-            query = query.join(Client).filter(or_(Invoice.invoice_code.like(search_term), Client.name.like(search_term)))
+            clean_input = search_query.strip()
+            clean_input_no_hash = clean_input.replace('#', '')
+            search_parts = clean_input_no_hash.split()
+            robust_pattern = "%" + "%".join(search_parts) + "%"
+
+            query = query.join(Client).filter(
+                or_(
+                    Invoice.invoice_code.like(robust_pattern), 
+                    Client.name.like(robust_pattern),
+                    Client.company.like(robust_pattern) # Added Company
+                )
+            )
 
         if status_filter != 'All':
             query = query.filter(Invoice.status == status_filter)
@@ -433,7 +514,6 @@ def create_invoice(order_id):
         order = Order.query.get_or_404(order_id)
         if request.method == 'POST':
             try:
-                # Failsafe Loop for Unique Code
                 attempts = 0
                 while attempts < 10:
                     new_code = f"INV-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
@@ -475,6 +555,18 @@ def view_invoice(invoice_id):
     except:
         return render_template('error.html', error_message="Invoice not found or invalid ID.")
 
+# --- NEW: INVOICE DOWNLOAD LOGGER ---
+@app.route('/log_invoice_download/<int:invoice_id>', methods=['POST'])
+def log_invoice_download(invoice_id):
+    if 'user_id' not in session: return "Unauthorized", 401
+    try:
+        invoice = Invoice.query.get(invoice_id)
+        if invoice:
+            user = User.query.get(session['user_id'])
+            log_action('User', user.username, 'Invoice Downloaded', 'Invoice', invoice.invoice_code, 'Success', f'Downloaded invoice {invoice.invoice_code}')
+        return "Logged", 200
+    except: return "Error", 500
+
 @app.route('/invoices/edit/<int:invoice_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_invoice(invoice_id):
@@ -482,7 +574,6 @@ def edit_invoice(invoice_id):
         invoice = Invoice.query.get_or_404(invoice_id)
         if request.method == 'POST':
             try:
-                # INPUT VALIDATION: Ensure amount is a number
                 try:
                     new_amount = float(request.form['amount'])
                 except ValueError:
@@ -541,6 +632,30 @@ def delete_invoice(invoice_id):
         flash(f"Delete failed: {str(e)}", "danger")
         return redirect(url_for('error_page'))
 
+@app.route('/update_targets', methods=['POST'])
+@admin_required
+def update_targets():
+    try:
+        new_targets = []
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        for m in months:
+            val_str = request.form.get(f'target_{m}', '0')
+            val_str = val_str.lower().replace(',', '')
+            if 'k' in val_str:
+                val = float(val_str.replace('k', '')) * 1000
+            elif 'm' in val_str:
+                val = float(val_str.replace('m', '')) * 1000000
+            else:
+                val = float(val_str)
+            new_targets.append(val)
+        
+        save_sales_targets(new_targets)
+        log_action('SuperAdmin', session.get('username'), 'Updated Targets', 'System', 'N/A', 'Success', 'Updated monthly sales targets')
+        flash('Sales targets updated successfully.', 'success')
+    except Exception as e:
+        flash(f'Error updating targets: {str(e)}', 'danger')
+    return redirect(url_for('dashboard'))
+
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -549,9 +664,8 @@ def dashboard():
         user = User.query.get(session['user_id'])
         if user and user.must_change_password: return redirect(url_for('change_password'))
     except:
-        pass # Continue if session check fails, though likely handled by decorator or top check
+        pass 
 
-    # --- DASHBOARD SAFE MODE BLOCK ---
     try:
         now = datetime.now()
         current_year = now.year
@@ -561,7 +675,6 @@ def dashboard():
         prev_month = prev_month_date.month
         prev_month_year = prev_month_date.year
 
-        # Basic Counters (Safe casting)
         total_orders = Order.query.count()
         total_orders_prev = Order.query.filter(Order.date_placed < now - timedelta(days=30)).count()
         order_growth = get_change(total_orders, total_orders_prev)
@@ -598,7 +711,7 @@ def dashboard():
         monthly_sales_query = db.session.query(extract('month', Invoice.date_created), func.sum(Invoice.amount)).filter(extract('year', Invoice.date_created) == current_year).group_by(extract('month', Invoice.date_created)).all()
         for m, total in monthly_sales_query: chart_invoice_reality[int(m)-1] = total
             
-        chart_invoice_target = [20000] * 12 
+        chart_invoice_target = get_sales_targets()
 
         ytd_invoiced_amt = db.session.query(func.sum(Order.amount)).filter(extract('year', Order.date_placed) == current_year, Order.status == 'Invoiced').scalar() or 0
         ytd_pending_amt = db.session.query(func.sum(Order.amount)).filter(extract('year', Order.date_placed) == current_year, Order.status == 'Pending').scalar() or 0
@@ -628,12 +741,10 @@ def dashboard():
             chart_service_data.append(Invoice.query.filter(func.date(Invoice.date_created) == day.date()).count())
     
     except Exception as e:
-        # FAILSAFE MODE: Log error and set everything to zero
         print(f"CRITICAL DASHBOARD ERROR: {e}")
         traceback.print_exc()
         flash("Dashboard loaded in safe mode due to data error.", "warning")
         
-        # Zero out all variables to prevent template crash
         total_orders=0; order_growth=0; total_sales=0; sales_growth=0
         products_sold=0; product_growth=0; new_customers=0; customer_growth=0
         ytd_sales=0; ytd_sales_growth=0; ytd_count=0; ytd_count_growth=0
@@ -669,17 +780,21 @@ def audit_log():
         query = AuditLog.query
         
         if search_q:
-            search_term = f"%{search_q}%"
+            clean_input = search_q.strip()
+            clean_input_no_hash = clean_input.replace('#', '')
+            search_parts = clean_input_no_hash.split()
+            robust_pattern = "%" + "%".join(search_parts) + "%"
+
             query = query.filter(
                 or_(
-                    AuditLog.description.like(search_term),
-                    AuditLog.action.like(search_term),
-                    AuditLog.actor_id.like(search_term),
-                    AuditLog.actor_type.like(search_term),
-                    AuditLog.entity_id.like(search_term),
-                    AuditLog.entity_type.like(search_term),
-                    AuditLog.status.like(search_term),
-                    func.cast(AuditLog.timestamp, db.String).like(search_term)
+                    AuditLog.description.like(robust_pattern),
+                    AuditLog.action.like(robust_pattern),
+                    AuditLog.actor_id.like(robust_pattern),
+                    AuditLog.actor_type.like(robust_pattern),
+                    AuditLog.entity_id.like(robust_pattern),
+                    AuditLog.entity_type.like(robust_pattern),
+                    AuditLog.status.like(robust_pattern),
+                    func.cast(AuditLog.timestamp, db.String).like(f"%{clean_input}%")
                 )
             )
             
@@ -690,6 +805,7 @@ def audit_log():
         unique_actions = [r.action for r in db.session.query(AuditLog.action).distinct()]
         return render_template('audit_log.html', logs=logs_pagination, unique_actions=unique_actions)
     except Exception as e:
+        print(traceback.format_exc()) 
         return render_template('error.html', error_message="Audit Log Unavailable.")
 
 @app.route('/audit/view/<int:log_id>')
@@ -727,7 +843,6 @@ def create_admin():
                 return redirect(url_for('create_admin'))
             count = User.query.count() + 1
             
-            # Retry logic for unique ID
             attempts = 0
             while attempts < 5:
                 custom_id = f"USR-{datetime.now().year}-{count:03d}"
@@ -796,6 +911,15 @@ def reset_password(user_id):
         user.password = temp_pass
         user.must_change_password = True
         
+        # --- AUTO-UNSUSPEND LOGIC ---
+        extra_log_note = ""
+        if user.is_suspended:
+            user.is_suspended = False
+            user.failed_attempts = 0 # Reset counter
+            extra_log_note = " (Auto-unsuspended)"
+        else:
+            user.failed_attempts = 0 # Just reset counter
+        
         target_email = user.email
         db.session.commit()
         
@@ -821,7 +945,7 @@ def reset_password(user_id):
         if old_email and old_email != user.email:
             change_note = f" (Email changed from {old_email} to {user.email})"
 
-        log_action('SuperAdmin', session.get('username'), 'Credentials Updated', 'User', user.custom_id, log_type, f'Reset password. Email: {email_msg}{change_note}')
+        log_action('SuperAdmin', session.get('username'), 'Credentials Updated', 'User', user.custom_id, log_type, f'Reset password{extra_log_note}. Email: {email_msg}{change_note}')
         return redirect(url_for('admin_panel'))
     except Exception as e:
         db.session.rollback()
@@ -834,6 +958,10 @@ def suspend_admin(user_id):
     try:
         user = User.query.get(user_id)
         user.is_suspended = not user.is_suspended
+        
+        if not user.is_suspended:
+            user.failed_attempts = 0
+            
         db.session.commit()
         action_type = "Account Suspended" if user.is_suspended else "Account Reactivated"
         log_action('SuperAdmin', session.get('username'), action_type, 'User', user.custom_id, 'Warning', f'User {user.username} status toggled.')
@@ -864,6 +992,7 @@ def danger_zone():
     current_skipped = get_total_skipped_days()
     settings = get_system_settings()
     show_passwords = settings.get('show_passwords', False)
+    email_required = settings.get('email_required', True)
     
     if request.method == 'POST':
         action = request.form.get('action')
@@ -873,6 +1002,14 @@ def danger_zone():
                 update_system_setting('show_passwords', new_state)
                 log_action('SuperAdmin', session.get('username'), 'Security Policy Change', 'System', 'ALL', 'Warning', f'Admin password visibility set to {new_state}')
                 flash(f'Password visibility turned {"ON" if new_state else "OFF"}.', 'warning' if new_state else 'success')
+                return redirect(url_for('danger_zone'))
+            
+            elif action == 'toggle_email_req':
+                new_state = not email_required
+                update_system_setting('email_required', new_state)
+                status_msg = "Enabled" if new_state else "Disabled"
+                log_action('SuperAdmin', session.get('username'), 'Policy Change', 'System', 'ALL', 'Warning', f'Mandatory email requirement {status_msg}')
+                flash(f'Mandatory email requirement {status_msg}.', 'success')
                 return redirect(url_for('danger_zone'))
 
             elif action == 'wipe':
@@ -945,28 +1082,153 @@ def danger_zone():
 
         return redirect(url_for('dashboard'))
             
-    return render_template('danger_zone.html', days_skipped=current_skipped, show_passwords=show_passwords)
+    return render_template('danger_zone.html', days_skipped=current_skipped, show_passwords=show_passwords, email_required=email_required)
 
+# --- REALISTIC FASHION BULK DATA GENERATOR ---
 @app.route('/generate_bulk_data')
 @operator_required
 def generate_bulk_data():
     try:
-        # ... [Keep bulk data generation logic identical, just wrapped in try/except] ...
-        # (Abbreviated to keep response length manageable, but paste your previous logic here)
+        clients_data = [
+            {"name": "Vogue Styles Boutique", "email": "orders@voguestyles.com", "company": "Vogue Styles"},
+            {"name": "Urban Trends Retail", "email": "procurement@urbantrends.sg", "company": "Urban Trends Retail"},
+            {"name": "Chic Avenue", "email": "hello@chicavenue.com", "company": "Chic Avenue"},
+            {"name": "The Fashion Loft", "email": "inventory@fashionloft.co", "company": "The Fashion Loft"},
+            {"name": "Runway Ready", "email": "buying@runwayready.com", "company": "Runway Ready"},
+            {"name": "Modern Look Dept Store", "email": "accounts@modernlook.com", "company": "Modern Look Dept Store"},
+            {"name": "Velvet & Silk", "email": "admin@velvetsilk.com", "company": "Velvet & Silk"},
+            {"name": "Minimalist Wardrobe", "email": "supply@minimalist.io", "company": "Minimalist Wardrobe"}
+        ]
         
-        # --- PASTE PREVIOUS BULK LOGIC HERE IF NEEDED, OR USE THE PREVIOUS FILE'S LOGIC ---
-        # For failsafe, just ensuring commit is safe:
-        
-        client_names = ["Vogue Styles", "Urban Trends"] # ... etc
-        # ... logic ...
-        
-        # Placeholder for brevity, ensure you copy the full function from previous step 
-        # or I can provide if requested. 
-        
-        flash("Success! Bulk data generated.")
+        product_catalog = [
+            ("Premium Cotton Crewneck T-Shirt", 18.50, 28.00),
+            ("Oversized Graphic Hoodie", 45.00, 75.00),
+            ("Silk Button-Up Blouse", 85.00, 120.00),
+            ("Ribbed Knit Sweater", 55.00, 89.00),
+            ("Classic Polo Shirt", 35.00, 55.00),
+            ("Slim Fit Denim Jeans", 60.00, 110.00),
+            ("High-Waisted Linen Trousers", 50.00, 85.00),
+            ("Pleated Midi Skirt", 40.00, 65.00),
+            ("Athleisure Joggers", 35.00, 60.00),
+            ("Floral Summer Dress", 65.00, 110.00),
+            ("Evening Cocktail Gown", 150.00, 320.00),
+            ("Tailored Formal Blazer", 120.00, 250.00),
+            ("Denim Jacket (Vintage Wash)", 70.00, 110.00),
+            ("Trench Coat", 180.00, 300.00),
+            ("Leather Belt", 25.00, 45.00),
+            ("Designer Sunglasses", 110.00, 210.00),
+            ("Canvas Tote Bag", 15.00, 30.00),
+            ("Leather Crossbody Bag", 130.00, 280.00),
+            ("White Leather Sneakers", 80.00, 140.00),
+            ("Ankle Boots", 90.00, 160.00)
+        ]
+
+        db_clients = []
+        for c_data in clients_data:
+            client = Client.query.filter_by(name=c_data['name']).first()
+            if not client:
+                client = Client(name=c_data['name'], email=c_data['email'], company=c_data['company'])
+                db.session.add(client)
+            db_clients.append(client)
+        db.session.commit()
+
+        for i in range(25):
+            client = random.choice(db_clients)
+            days_ago = random.randint(0, 90)
+            order_date = datetime.utcnow() - timedelta(days=days_ago)
+
+            is_multi_item = random.random() > 0.3
+            num_items = random.randint(2, 6) if is_multi_item else 1
+            selected_products = random.sample(product_catalog, num_items)
+            
+            attempts = 0
+            while attempts < 10:
+                order_code = f"ORD-{order_date.strftime('%Y%m%d')}-{random.randint(1000,9999)}"
+                if not Order.query.filter_by(order_code=order_code).first(): break
+                attempts += 1
+
+            new_order = Order(
+                order_code=order_code,
+                client_id=client.id,
+                description=f"Fashion Stock Order for {client.company}",
+                amount=0, 
+                date_placed=order_date,
+                status=random.choice(['Pending', 'Invoiced', 'Invoiced', 'Invoiced']) 
+            )
+            db.session.add(new_order)
+            db.session.flush() 
+
+            running_subtotal = 0.0
+
+            for prod_name, min_p, max_p in selected_products:
+                qty = random.choices([1, 2, 5, 10, 15, 20], weights=[10, 20, 30, 20, 10, 10])[0]
+                base_price = random.uniform(min_p, max_p)
+                unit_price = round(base_price, 2)
+                line_total = round(unit_price * qty, 2)
+                running_subtotal += line_total
+
+                item = OrderItem(
+                    order_id=new_order.id,
+                    item_name=prod_name,
+                    quantity=qty,
+                    unit_price=unit_price,
+                    total_price=line_total
+                )
+                db.session.add(item)
+
+            shipping_cost = round(random.uniform(15.00, 45.00), 2)
+            if running_subtotal > 1500: shipping_cost = round(random.uniform(60.00, 150.00), 2)
+            running_subtotal += shipping_cost
+            
+            shipping_item = OrderItem(
+                order_id=new_order.id,
+                item_name="Shipping & Handling (Standard)",
+                quantity=1,
+                unit_price=shipping_cost,
+                total_price=shipping_cost
+            )
+            db.session.add(shipping_item)
+
+            gst_amount = round(running_subtotal * 0.09, 2)
+            gst_item = OrderItem(
+                order_id=new_order.id,
+                item_name="GST (9%)",
+                quantity=1,
+                unit_price=gst_amount,
+                total_price=gst_amount
+            )
+            db.session.add(gst_item)
+
+            final_total = running_subtotal + gst_amount
+            new_order.amount = round(final_total, 2)
+
+            if new_order.status == 'Invoiced':
+                inv_code = f"INV-{order_date.strftime('%Y%m%d')}-{random.randint(100,999)}"
+                inv_status = 'Pending'
+                days_diff = (datetime.utcnow() - order_date).days
+                if days_diff > 35: inv_status = random.choice(['Paid', 'Paid', 'Overdue'])
+                elif days_diff < 5: inv_status = 'Sent'
+                else: inv_status = random.choice(['Paid', 'Pending'])
+
+                invoice = Invoice(
+                    invoice_code=inv_code,
+                    order_id=new_order.id,
+                    client_id=client.id,
+                    amount=new_order.amount,
+                    status=inv_status,
+                    date_created=order_date,
+                    date_due=order_date + timedelta(days=30)
+                )
+                db.session.add(invoice)
+
+        db.session.commit()
+        log_action('System', 'DataGen', 'Bulk Generation', 'System', 'N/A', 'Success', 'Generated 25 realistic fashion orders.')
+        flash("Success! Generated 25 fashion orders with GST (9%) and Shipping.", "success")
         return redirect(url_for('dashboard'))
+
     except Exception as e:
         db.session.rollback()
+        print(traceback.format_exc())
         flash(f"Bulk Generation Failed: {str(e)}", "danger")
         return redirect(url_for('dashboard'))
 
@@ -981,6 +1243,9 @@ if __name__ == '__main__':
         try:
             with db.engine.connect() as conn:
                 try: conn.execute(text("ALTER TABLE `order` ADD COLUMN order_code VARCHAR(50)"))
+                except: pass
+                # NEW: Add failsafe column if missing
+                try: conn.execute(text("ALTER TABLE user ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
                 except: pass
         except: pass
         
