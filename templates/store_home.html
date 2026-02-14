@@ -1,0 +1,321 @@
+{% extends "store_base.html" %}
+
+{% block title %}Shop.co | Redefine Luxury{% endblock %}
+
+{% block content %}
+
+<section style="position: relative; height: 90vh; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000;">
+    <div style="position: absolute; inset: 0; opacity: 0.6;">
+        <img src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=2070&auto=format&fit=crop" 
+             style="width: 100%; height: 100%; object-fit: cover; animation: slowZoom 20s infinite alternate;">
+    </div>
+    
+    <div class="container animate-up" style="position: relative; z-index: 2; text-align: center; color: white; max-width: 800px;">
+        <span style="display: block; font-size: 11px; font-weight: 600; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 25px; opacity: 0.8;">
+            Spring / Summer 2026
+        </span>
+        <h1 style="font-size: clamp(36px, 5vw, 60px); font-weight: 800; line-height: 1.1; margin: 0 0 35px; text-transform: uppercase; letter-spacing: -1px;">
+            Redefine<br>Your Style.
+        </h1>
+        <div>
+            <a href="{{ url_for('store_shop') }}" class="hero-btn">
+                Shop Collection
+            </a>
+        </div>
+    </div>
+</section>
+
+<div class="marquee-container">
+    <div class="marquee-track">
+        {% for i in range(3) %}
+        <span class="marquee-item">New Arrivals Dropping Daily</span> •
+        <span class="marquee-item">Free Worldwide Shipping</span> •
+        <span class="marquee-item">Shop.co Exclusive Drops</span> •
+        <span class="marquee-item">Luxury Essentials</span> •
+        {% endfor %}
+    </div>
+</div>
+
+<section class="section-pad bg-white">
+    <div class="container header-flex">
+        <h2 class="section-title">New Arrivals</h2>
+        <a href="{{ url_for('store_shop') }}" class="view-all-link">View All Arrivals</a>
+    </div>
+
+    <div class="container">
+        <div class="static-grid">
+            {% for product in new_arrivals %}
+            <div class="product-card">
+                <div class="card-image-wrap">
+                    <a href="{{ url_for('store_product', product_id=product.id) }}">
+                        <img src="{{ product.image_url }}" alt="{{ product.name }}">
+                    </a>
+                    <form action="{{ url_for('store_cart') }}" method="POST">
+                        <input type="hidden" name="product_id" value="{{ product.id }}">
+                        <input type="hidden" name="quantity" value="1">
+                        <button type="submit" class="quick-add-icon" title="Add to Cart">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </form>
+                    <span class="badge-new">New</span>
+                </div>
+                <a href="{{ url_for('store_product', product_id=product.id) }}" class="card-info">
+                    <div class="card-cat">{{ product.category }}</div>
+                    <h3 class="card-name">{{ product.name }}</h3>
+                    <div class="card-meta">
+                        <span class="card-rating">
+                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
+                        </span>
+                        <span class="card-sold">{{ product.sales_count }} sold</span>
+                    </div>
+                    <div class="card-price">${{ "%.2f"|format(product.price) }}</div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-pad bg-light">
+    <div class="container header-flex">
+        <div>
+            <h2 class="section-title">Top Selling</h2>
+            <p style="color: #666; margin-top: 5px; font-size: 14px; margin-bottom: 0;">Curated favorites of the season.</p>
+        </div>
+        <a href="{{ url_for('store_shop') }}" class="view-all-link">View All Best Sellers</a>
+    </div>
+
+    <div class="container">
+        <div class="static-grid">
+            {% for product in top_selling %}
+            <div class="product-card">
+                <div class="card-image-wrap">
+                    <a href="{{ url_for('store_product', product_id=product.id) }}">
+                        <img src="{{ product.image_url }}" alt="{{ product.name }}">
+                    </a>
+                    <form action="{{ url_for('store_cart') }}" method="POST">
+                        <input type="hidden" name="product_id" value="{{ product.id }}">
+                        <input type="hidden" name="quantity" value="1">
+                        <button type="submit" class="quick-add-icon" title="Add to Cart">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </form>
+                    <span class="badge-hot">Hot</span>
+                </div>
+                <a href="{{ url_for('store_product', product_id=product.id) }}" class="card-info">
+                    <div class="card-cat">{{ product.category }}</div>
+                    <h3 class="card-name">{{ product.name }}</h3>
+                    <div class="card-meta">
+                        <span class="card-rating">
+                            <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star-half-stroke"></i>
+                        </span>
+                        <span class="card-sold">{{ product.sales_count }} sold</span>
+                    </div>
+                    <div class="card-price">${{ "%.2f"|format(product.price) }}</div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="section-pad container">
+    <h2 class="section-title text-center mb-50" style="font-size: 36px;">Explore Categories</h2>
+    
+    <div class="bento-grid">
+        <a href="{{ url_for('store_shop', category='Formal') }}" class="bento-item span-2-row span-2-col">
+            <img src="https://images.unsplash.com/photo-1600091106787-88069af720c2?q=80&w=900&auto=format&fit=crop" alt="Formal Collection">
+            <div class="bento-overlay">
+                <h3>Formal Edit</h3>
+                <span class="btn-link">Shop Now</span>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('store_shop', category='Tops') }}" class="bento-item span-2-col">
+            <img src="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=800&q=80" alt="Casual Essentials">
+            <div class="bento-overlay">
+                <h3>Casual Essentials</h3>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('store_shop', category='Shoes') }}" class="bento-item">
+            <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80" alt="Shoes">
+            <div class="bento-overlay">
+                <h3>Shoes</h3>
+            </div>
+        </a>
+        
+        <a href="{{ url_for('store_shop', category='Accessories') }}" class="bento-item">
+            <img src="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=600&q=80" alt="Accessories">
+            <div class="bento-overlay">
+                <h3>Accessories</h3>
+            </div>
+        </a>
+    </div>
+</section>
+
+<section class="section-pad bg-light overflow-hidden text-center" style="margin-top: 20px;">
+    <h2 class="section-title mb-10">Client Experiences</h2>
+    <p class="text-muted mb-40">Trusted by style enthusiasts worldwide.</p>
+
+    <div class="reviews-marquee-container">
+        <div class="reviews-track" style="animation-duration: 80s;">
+            {% for i in range(2) %}
+                <div class="review-card">
+                    <div class="stars">★★★★★</div>
+                    <h4>"Unmatched Quality"</h4>
+                    <p>The materials and cuts are absolutely premium. Worth every penny.</p>
+                    <div class="reviewer">James D. <i class="fa-solid fa-certificate"></i></div>
+                </div>
+                <div class="review-card">
+                    <div class="stars">★★★★★</div>
+                    <h4>"My New Go-To"</h4>
+                    <p>Shipping was incredibly fast and the packaging was an experience in itself.</p>
+                    <div class="reviewer">Sarah L. <i class="fa-solid fa-certificate"></i></div>
+                </div>
+                <div class="review-card">
+                    <div class="stars">★★★★☆</div>
+                    <h4>"Impeccable Fit"</h4>
+                    <p>Their sizing guide is spot on. Fits exactly how I wanted it to.</p>
+                    <div class="reviewer">Michael R. <i class="fa-solid fa-certificate"></i></div>
+                </div>
+                <div class="review-card">
+                    <div class="stars">★★★★★</div>
+                    <h4>"Stunning Pieces"</h4>
+                    <p>Pictures don't do justice. These pieces are even better in person.</p>
+                    <div class="reviewer">Elena K. <i class="fa-solid fa-certificate"></i></div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<script>
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) entry.target.classList.add('show');
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.section-pad').forEach((el) => {
+        el.classList.add('hidden');
+        observer.observe(el);
+    });
+</script>
+
+<style>
+    /* --- UTILITIES --- */
+    :root { --bg-light: #f9f9f9; --text-dark: #111; --muted: #777; --gold: #FFD700; }
+    .bg-white { background: #fff; } .bg-light { background: var(--bg-light); } .text-center { text-align: center; } .relative { position: relative; } .overflow-hidden { overflow: hidden; }
+    .mb-10 { margin-bottom: 10px; } .mb-40 { margin-bottom: 40px; } .mb-50 { margin-bottom: 50px; }
+    .text-muted { color: var(--muted); font-size: 14px; }
+    .section-pad { padding: 40px 0; }
+    
+    .header-flex { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 25px; }
+    
+    .hidden { opacity: 0; transform: translateY(30px); transition: all 0.8s ease; }
+    .show { opacity: 1; transform: translateY(0); }
+    @keyframes slowPan { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    .section-title { font-size: 32px; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; margin: 0; line-height: 1; color: var(--text-dark); }
+    
+    /* ANIMATED VIEW ALL LINK */
+    .view-all-link { 
+        font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; 
+        color: black; text-decoration: none; position: relative; padding-bottom: 2px;
+    }
+    .view-all-link::after {
+        content: ''; position: absolute; width: 0; height: 2px; 
+        bottom: 0; left: 0; background-color: #000; transition: width 0.3s ease;
+    }
+    .view-all-link:hover::after { width: 100%; }
+
+    /* Hero */
+    .hero-btn { background: white; color: black; padding: 15px 40px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; display: inline-block; }
+    .hero-btn:hover { background: black; color: white; transform: translateY(-2px); }
+    .animate-up { animation: fadeInUp 1s ease backwards 0.3s; }
+    @keyframes slowZoom { from { transform: scale(1); } to { transform: scale(1.1); } }
+
+    /* Marquee */
+    .marquee-container { background: black; color: white; padding: 14px 0; overflow: hidden; }
+    .marquee-track { display: flex; white-space: nowrap; animation: scrollInfinite 30s linear infinite; }
+    .marquee-item { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; padding: 0 3vw; }
+    @keyframes scrollInfinite { 0% { transform: translateX(0); } 100% { transform: translateX(-33.33%); } }
+
+    /* Static Grid */
+    .static-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+
+    /* Product Cards */
+    .product-card { background: transparent; transition: transform 0.3s ease; border-radius: 4px; }
+    .product-card:hover { transform: translateY(-5px); }
+    
+    .card-image-wrap { position: relative; aspect-ratio: 4/5; background: #f0f0f0; overflow: hidden; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: 0.3s; }
+    .product-card:hover .card-image-wrap { box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.7s ease; }
+    .product-card:hover img { transform: scale(1.08); }
+
+    .card-info { padding: 12px 0; display: block; text-align: center; }
+    .card-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #999; margin-bottom: 4px; letter-spacing: 1px; }
+    .card-name { font-size: 14px; font-weight: 600; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-dark); }
+    
+    /* Meta & Stars */
+    .card-rating { font-size: 10px; color: var(--gold); margin-bottom: 0; }
+    .card-sold { font-weight: 700; color: #777; margin-left: 5px; } 
+    .card-meta { display: flex; justify-content: center; align-items: center; gap: 5px; font-size: 10px; margin-bottom: 5px; }
+
+    .card-price { font-size: 14px; font-weight: 800; color: var(--text-dark); }
+
+    .quick-add-icon { position: absolute; bottom: 15px; right: 15px; width: 32px; height: 32px; border-radius: 50%; background: white; color: black; border: none; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(10px) scale(0.9); transition: all 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .quick-add-icon:hover { background: black; color: white; }
+    .product-card:hover .quick-add-icon { opacity: 1; transform: translateY(0) scale(1); }
+
+    .badge-new, .badge-hot { position: absolute; top: 10px; left: 10px; padding: 4px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: white; }
+    .badge-new { background: #000; } .badge-hot { background: #e11d48; }
+
+    /* Bento Grid */
+    .bento-grid { 
+        display: grid; 
+        grid-template-columns: repeat(4, 1fr); 
+        grid-auto-rows: 150px; 
+        gap: 15px; 
+    }
+    .bento-item { position: relative; overflow: hidden; border-radius: 4px; }
+    .bento-item img { 
+        width: 100%; height: 100%; object-fit: cover; 
+        transition: 0.7s ease; 
+        display: block; 
+    }
+    .bento-item:hover img { transform: scale(1.06); }
+    .bento-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent 40%); padding: 20px; display: flex; flex-direction: column; justify-content: flex-end; color: white; }
+    .bento-overlay h3 { margin: 0 0 10px; font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+    .btn-link { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; text-decoration: underline; text-underline-offset: 4px; opacity: 0.9; transition: 0.3s; }
+    .bento-item:hover .btn-link { opacity: 1; padding-left: 5px; }
+    .span-2-col { grid-column: span 2; } .span-2-row { grid-row: span 2; }
+
+    /* Reviews */
+    .reviews-marquee-container { overflow: hidden; padding: 20px 0; }
+    .reviews-track { display: flex; width: max-content; animation: scrollReviews 80s linear infinite; }
+    .reviews-track:hover { animation-play-state: paused; }
+    .review-card { width: 340px; background: white; padding: 35px; margin: 0 15px; border-radius: 4px; text-align: left; box-shadow: 0 5px 20px rgba(0,0,0,0.03); border: 1px solid #f5f5f5; }
+    
+    /* REVIEWS STARS YELLOW */
+    .stars { color: var(--gold); letter-spacing: 2px; font-size: 14px; margin-bottom: 15px; }
+    
+    .review-card h4 { font-size: 17px; font-weight: 800; margin: 0 0 10px; color: var(--text-dark); }
+    .review-card p { font-size: 15px; line-height: 1.6; color: #555; font-style: italic; margin-bottom: 20px; }
+    .reviewer { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+    .reviewer i { color: #2563eb; }
+    @keyframes scrollReviews { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+
+    /* Responsive */
+    @media (max-width: 900px) { 
+        .static-grid { grid-template-columns: repeat(2, 1fr); } 
+        .bento-grid { grid-template-columns: 1fr; grid-auto-rows: 220px; } .span-2-col, .span-2-row { grid-column: span 1; grid-row: span 1; }
+        .section-title { font-size: 32px; }
+    }
+    @media (max-width: 600px) { 
+        .static-grid { grid-template-columns: 1fr; }
+    }
+</style>
+
+{% endblock %}

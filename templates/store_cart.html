@@ -1,0 +1,62 @@
+{% extends "store_base.html" %}
+{% block content %}
+<div class="container" style="max-width: 900px;">
+    <h1 style="font-size: 36px; font-weight: 800; margin-bottom: 40px;">Shopping Cart</h1>
+
+    {% if cart_items %}
+        <div style="display: grid; gap: 40px;">
+            <div style="border-top: 1px solid var(--border);">
+                {% for item in cart_items %}
+                <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 24px; padding: 24px 0; border-bottom: 1px solid var(--border);">
+                    <div style="background: #f5f5f5; border-radius: 8px; overflow: hidden; height: 100px;">
+                        <img src="{{ item.image }}" style="width: 100%; height: 100%; object-fit: cover;">
+                    </div>
+                    
+                    <div>
+                        <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 8px;">{{ item.name }}</h3>
+                        <p style="color: var(--text-muted); font-size: 14px; margin: 0;">${{ "%.2f"|format(item.price) }}</p>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between;">
+                        <div style="font-size: 18px; font-weight: 700;">${{ "%.2f"|format(item.total) }}</div>
+                        
+                        <form action="{{ url_for('update_cart') }}" method="POST" style="display: flex; align-items: center; gap: 12px;">
+                            <input type="hidden" name="product_id" value="{{ item.id }}">
+                            
+                            <div style="display: flex; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px;">
+                                <input type="number" name="quantity" value="{{ item.qty }}" min="0" 
+                                       style="width: 40px; border: none; text-align: center; font-weight: 600; outline: none;">
+                            </div>
+                            <button type="submit" style="font-size: 13px; font-weight: 600; color: #2563eb; background: none; border: none; cursor: pointer;">Update</button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div style="background: #fafafa; padding: 32px; border-radius: 12px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 16px; color: #555;">
+                    <span>Subtotal</span>
+                    <span>${{ "%.2f"|format(grand_total) }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 24px; color: #555;">
+                    <span>Shipping</span>
+                    <span>Calculated at checkout</span>
+                </div>
+                <div style="border-top: 1px solid var(--border); padding-top: 24px; display: flex; justify-content: space-between; font-size: 24px; font-weight: 800; margin-bottom: 32px;">
+                    <span>Total</span>
+                    <span>${{ "%.2f"|format(grand_total) }}</span>
+                </div>
+                <a href="{{ url_for('store_checkout') }}" class="btn" style="width: 100%; font-size: 16px; padding: 18px;">
+                    Checkout Securely
+                </a>
+            </div>
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 100px 0;">
+            <p style="color: #999; margin-bottom: 24px; font-size: 18px;">Your cart is currently empty.</p>
+            <a href="{{ url_for('store_shop') }}" class="btn">Continue Shopping</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

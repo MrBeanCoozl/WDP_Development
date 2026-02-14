@@ -216,6 +216,18 @@ class AuditLog(db.Model):
     status = db.Column(db.String(50)) # 'Success' or 'Failure'
     description = db.Column(db.String(255)) # Details
 
+    # --- NEW STORE MODEL ---
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(50))
+    image_url = db.Column(db.String(200))
+    description = db.Column(db.String(500))
+    stock = db.Column(db.Integer, default=100)
+    sales_count = db.Column(db.Integer, default=0)
+# Update Client to handle store users (Optional: Add password later for full login)
+# For now, we match by Email during checkout.
 # ==============================================================================
 # SECTION 5: HELPER FUNCTIONS (The Logic Tools)
 # ==============================================================================
@@ -367,9 +379,18 @@ def operator_required(f):
 
 @app.route('/')
 def home():
-    # If not logged in, go to login. If logged in, go to dashboard.
-    if 'user_id' not in session: return redirect(url_for('login'))
-    return redirect(url_for('dashboard'))
+    # New Arrivals: Last 4 added
+    new_arrivals = Product.query.order_by(Product.id.desc()).limit(4).all()
+    
+    # Top Selling: Sort by sales_count descending
+    top_selling = Product.query.order_by(Product.sales_count.desc()).limit(4).all()
+    
+    return render_template('store_home.html', new_arrivals=new_arrivals, top_selling=top_selling)
+
+@app.route('/admin')
+def admin_redirect():
+    # Convenience route: /admin -> goes to the real Admin Login
+    return redirect(url_for('login'))
 
 # --- LOGIN & AUTHENTICATION ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -1362,6 +1383,248 @@ def guide(): return render_template('guide.html')
 
 @app.route('/error')
 def error_page(): return render_template('error.html')
+
+# ==============================================================================
+# SECTION: E-COMMERCE STORE ROUTES
+# ==============================================================================
+
+# Context processor to make 'cart' available on every store page
+@app.context_processor
+def inject_cart():
+    cart = session.get('cart', {})
+    cart_count = sum(item['qty'] for item in cart.values())
+    return dict(cart_count=cart_count)
+
+@app.route('/')
+def store_home():
+    # Show 4 featured products
+    featured = Product.query.limit(4).all()
+    return render_template('store_home.html', featured=featured)
+
+@app.route('/shop')
+def store_shop():
+    # 1. Get Filter Parameters
+    search_query = request.args.get('q', '')
+    category_filter = request.args.get('category', 'All')
+    price_min = request.args.get('min_price', 0, type=int)
+    price_max = request.args.get('max_price', 1000, type=int)
+
+    # 2. Build the Query
+    query = Product.query
+    
+    if search_query:
+        query = query.filter(Product.name.ilike(f'%{search_query}%'))
+    
+    if category_filter != 'All':
+        query = query.filter(Product.category == category_filter)
+        
+    query = query.filter(Product.price >= price_min)
+    query = query.filter(Product.price <= price_max)
+
+    products = query.all()
+    
+    # Get unique categories for the filter sidebar
+    categories = [r.category for r in db.session.query(Product.category).distinct()]
+
+    return render_template('store_shop.html', products=products, categories=categories, 
+                           current_cat=category_filter, search_query=search_query)
+
+@app.route('/product/<int:product_id>')
+def store_product(product_id):
+    product = Product.query.get_or_404(product_id)
+    return render_template('store_product.html', product=product)
+
+@app.route('/cart', methods=['GET', 'POST'])
+def store_cart():
+    if 'cart' not in session: session['cart'] = {}
+    
+    # Handle "Add to Cart"
+    if request.method == 'POST':
+        p_id = request.form.get('product_id')
+        qty = int(request.form.get('quantity', 1))
+        
+        product = Product.query.get(p_id)
+        if product:
+            cart = session['cart']
+            if p_id in cart:
+                cart[p_id]['qty'] += qty
+            else:
+                cart[p_id] = {
+                    'name': product.name, 
+                    'price': product.price, 
+                    'qty': qty, 
+                    'image': product.image_url
+                }
+            session.modified = True
+            flash(f'Added {product.name} to cart!', 'success')
+        return redirect(url_for('store_cart'))
+
+    # Calculate Totals for Display
+    cart_items = []
+    grand_total = 0
+    for p_id, item in session['cart'].items():
+        total = item['price'] * item['qty']
+        grand_total += total
+        item['total'] = total
+        item['id'] = p_id
+        cart_items.append(item)
+    
+    return render_template('store_cart.html', cart_items=cart_items, grand_total=grand_total)
+
+@app.route('/cart/remove/<p_id>')
+def remove_from_cart(p_id):
+    if 'cart' in session and p_id in session['cart']:
+        del session['cart'][p_id]
+        session.modified = True
+    return redirect(url_for('store_cart'))
+
+@app.route('/checkout', methods=['GET', 'POST'])
+def store_checkout():
+    if not session.get('cart'): return redirect(url_for('store_shop'))
+
+    if request.method == 'POST':
+        try:
+            # 1. Get Customer Details
+            name = request.form['name']
+            email = request.form['email']
+            address = request.form['address'] # Stored in Order description
+
+            # 2. CHECKOUT BRIDGE: Find or Create Client
+            client = Client.query.filter_by(email=email).first()
+            if not client:
+                client = Client(name=name, email=email, company="Online Customer")
+                db.session.add(client)
+                db.session.commit() # Commit to get ID
+            
+            # 3. Create Order
+            cart = session['cart']
+            total_amount = sum(item['price'] * item['qty'] for item in cart.values())
+            
+            # Generate Order Code
+            order_code = f"ORD-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
+            
+            new_order = Order(
+                order_code=order_code,
+                client_id=client.id,
+                description=f"Online Order - Shipping to: {address}",
+                amount=total_amount,
+                status='Invoiced', # Auto-complete the order
+                date_placed=datetime.utcnow()
+            )
+            db.session.add(new_order)
+            db.session.flush() # Flush to get Order ID
+
+            # 4. Create Order Items
+            for p_id, item in cart.items():
+                order_item = OrderItem(
+                    order_id=new_order.id,
+                    item_name=item['name'],
+                    quantity=item['qty'],
+                    unit_price=item['price'],
+                    total_price=item['price'] * item['qty']
+                )
+                db.session.add(order_item)
+
+            # 5. AUTOMATIC INVOICE GENERATION (Paid)
+            inv_code = f"INV-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
+            new_invoice = Invoice(
+                invoice_code=inv_code,
+                order_id=new_order.id,
+                client_id=client.id,
+                amount=total_amount,
+                status='Paid', # Instant payment assumed for e-commerce
+                date_created=datetime.utcnow(),
+                date_due=datetime.utcnow()
+            )
+            db.session.add(new_invoice)
+            
+            # 6. Finalize
+            db.session.commit()
+            session.pop('cart', None) # Clear Cart
+            
+            log_action('User', name, 'Online Purchase', 'Order', order_code, 'Success', f'Web order placed by {email}')
+            flash(f"Order {order_code} placed successfully! Thank you.", "success")
+            return redirect(url_for('store_home'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error processing order: {str(e)}", "danger")
+            return redirect(url_for('store_cart'))
+
+    return render_template('store_checkout.html')
+
+# --- UPDATE THE SEEDER IN APP.PY ---
+@app.route('/seed_products')
+def seed_products():
+    if Product.query.count() > 0: return "Database already has products."
+    
+    products = [
+        # 1. STREETWEAR (Casual Vibe)
+        Product(name="Oversized Boxy Tee", price=45.00, category="Tops", 
+                image_url="https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=600&q=80", 
+                description="Heavyweight cotton tee with a boxy street fit.", sales_count=342),
+        
+        # 2. RALPH LAUREN VIBE (Formal/Smart)
+        Product(name="Signature Oxford Shirt", price=89.00, category="Formal", 
+                image_url="https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=600&q=80", 
+                description="Tailored fit oxford shirt for a polished look.", sales_count=120),
+        
+        # 3. NIKE VIBE (Shoes)
+        Product(name="Air Retro High OG", price=180.00, category="Shoes", 
+                image_url="https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?auto=format&fit=crop&w=600&q=80", 
+                description="Iconic silhouette with premium leather cushioning.", sales_count=560),
+        
+        # 4. MLB VIBE (Accessories/Caps)
+        Product(name="NY Heritage Cap", price=35.00, category="Accessories", 
+                image_url="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=600&q=80", 
+                description="Classic 6-panel structured cap in navy blue.", sales_count=215),
+
+        # 5. STREETWEAR (Outerwear)
+        Product(name="Essentials Fleece Hoodie", price=95.00, category="Outerwear", 
+                image_url="https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=600&q=80", 
+                description="The ultimate comfort hoodie in neutral beige.", sales_count=410),
+
+        # 6. RALPH LAUREN VIBE (Bottoms)
+        Product(name="Pleated Chino Trousers", price=75.00, category="Formal", 
+                image_url="https://images.unsplash.com/photo-1473966968600-fa801b869a1a?auto=format&fit=crop&w=600&q=80", 
+                description="Smart casual trousers with a relaxed taper.", sales_count=89),
+
+        # 7. NIKE VIBE (Activewear)
+        Product(name="Pro Performance Runners", price=140.00, category="Shoes", 
+                image_url="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80", 
+                description="Engineered for speed and endurance.", sales_count=320),
+
+        # 8. CASUAL
+        Product(name="Utility Cargo Pants", price=65.00, category="Bottoms", 
+                image_url="https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=600&q=80", 
+                description="Functional cargo pants with multiple pockets.", sales_count=150)
+    ]
+    
+    db.session.add_all(products)
+    db.session.commit()
+    return "Seeded database with Pro Brand Images."
+
+@app.route('/store_login')
+def store_login():
+    return render_template('store_login.html')
+
+@app.route('/cart/update', methods=['POST'])
+def update_cart():
+    if 'cart' not in session: return redirect(url_for('store_cart'))
+    
+    product_id = request.form.get('product_id')
+    quantity = int(request.form.get('quantity', 1))
+    
+    if product_id in session['cart']:
+        if quantity > 0:
+            session['cart'][product_id]['qty'] = quantity
+            flash('Cart updated.', 'success')
+        else:
+            del session['cart'][product_id] # Remove if qty is 0
+            flash('Item removed.', 'success')
+    
+    session.modified = True
+    return redirect(url_for('store_cart'))
 
 # ==============================================================================
 # SECTION 7: MAIN EXECUTION

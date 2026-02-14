@@ -1,0 +1,65 @@
+{% extends "store_base.html" %}
+{% block content %}
+<div class="container" style="display: flex; gap: 60px; padding-top: 60px;">
+    
+    <aside style="width: 200px; flex-shrink: 0; position: sticky; top: 100px; height: fit-content;">
+        <h3 style="font-size: 14px; font-weight: 700; text-transform: uppercase; margin-bottom: 20px;">Filters</h3>
+        
+        <form id="filterForm" method="GET" action="{{ url_for('store_shop') }}">
+            <input type="hidden" name="q" value="{{ search_query }}">
+            
+            <div style="margin-bottom: 40px;">
+                <h4 style="font-size: 12px; font-weight: 600; color: #999; margin-bottom: 15px;">CATEGORY</h4>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <label style="cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; {% if current_cat == 'All' %}font-weight: 700;{% endif %}">
+                        <span>All Products</span>
+                        <input type="radio" name="category" value="All" {% if current_cat == 'All' %}checked{% endif %} onchange="this.form.submit()" style="display: none;">
+                    </label>
+                    {% for cat in categories %}
+                    <label style="cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; {% if current_cat == cat %}font-weight: 700;{% endif %}">
+                        <span>{{ cat }}</span>
+                        <input type="radio" name="category" value="{{ cat }}" {% if current_cat == cat %}checked{% endif %} onchange="this.form.submit()" style="display: none;">
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </form>
+    </aside>
+
+    <main style="flex: 1;">
+        <div style="margin-bottom: 30px;">
+            <h1 style="font-size: 24px; font-weight: 800; text-transform: uppercase; margin: 0;">{{ current_cat }}</h1>
+            <p style="font-size: 13px; color: #666; margin-top: 5px;">{{ products|length }} items</p>
+        </div>
+
+        {% if products %}
+            <div class="product-grid">
+                {% for product in products %}
+                <div class="product-card">
+                    <div class="card-image-wrapper">
+                        <a href="{{ url_for('store_product', product_id=product.id) }}">
+                            <img src="{{ product.image_url }}" class="card-image">
+                        </a>
+                        <form action="{{ url_for('store_cart') }}" method="POST">
+                            <input type="hidden" name="product_id" value="{{ product.id }}">
+                            <input type="hidden" name="quantity" value="1">
+                            <button type="submit" class="quick-add-btn">Quick Add</button>
+                        </form>
+                    </div>
+                    <a href="{{ url_for('store_product', product_id=product.id) }}" class="card-details">
+                        <div class="card-category">{{ product.category }}</div>
+                        <div class="card-title">{{ product.name }}</div>
+                        <div class="card-price">${{ "%.2f"|format(product.price) }}</div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="padding: 60px; text-align: center; border: 1px dashed #ddd; border-radius: 8px;">
+                <p style="color: #666;">No products found in this category.</p>
+                <a href="{{ url_for('store_shop') }}" style="font-size: 13px; font-weight: 700; text-decoration: underline;">Reset Filters</a>
+            </div>
+        {% endif %}
+    </main>
+</div>
+{% endblock %}
