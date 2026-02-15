@@ -31,7 +31,7 @@
         .nav-links { display: flex; gap: 24px; align-items: center; }
         .nav-icon { font-size: 18px; position: relative; padding: 5px; color: #111; cursor: pointer; }
         .badge { position: absolute; top: -2px; right: -4px; background: #000; color: #fff; font-size: 9px; font-weight: 700; height: 15px; width: 15px; display: flex; align-items: center; justify-content: center; border-radius: 50%; border: 2px solid white; }
-        .user-profile { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .user-profile { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; cursor: pointer; }
         .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
         footer { background: #fff; padding-top: 60px; margin-top: auto; border-top: 1px solid #e5e5e5; }
         .footer-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1.5fr; gap: 40px; margin-bottom: 60px; }
@@ -65,14 +65,10 @@
         </div>
         <div class="nav-links">
             {% if g.user %}
-                <div class="nav-item">
-                    <div class="user-profile"><i class="fa-regular fa-user"></i> {{ g.user.first_name if g.user.first_name else 'Account' }}</div>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-link" style="color: #999; font-size: 11px; cursor: default;">Signed in as<br><strong>{{ g.user.email }}</strong></div>
-                        <a href="#" class="dropdown-link">My Orders</a>
-                        <a href="{{ url_for('store_logout') }}" class="dropdown-link logout-link">Logout</a>
-                    </div>
-                </div>
+                <a href="{{ url_for('store_profile') }}" class="nav-item user-profile">
+                    <i class="fa-regular fa-user"></i> 
+                    {{ g.user.first_name if g.user.first_name else 'Account' }}
+                </a>
             {% else %}
                 <a href="{{ url_for('store_auth') }}" class="nav-icon"><i class="fa-regular fa-user"></i></a>
             {% endif %}

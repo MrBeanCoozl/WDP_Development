@@ -20,13 +20,20 @@
 <div class="auth-wrapper">
     <div class="auth-card">
         <h1 class="auth-title">Welcome to Shop.co</h1>
+        
         <form method="POST">
             <input type="email" name="email" class="form-input" placeholder="name@example.com" required autofocus>
             <button type="submit" class="btn-auth">Continue</button>
         </form>
+
         <div class="divider"><span>OR CONTINUE WITH</span></div>
-        <a href="{{ url_for('google_callback') }}" class="social-btn"><i class="fa-brands fa-google"></i> Google</a>
-        <a href="#" class="social-btn"><i class="fa-brands fa-apple"></i> Apple</a>
+
+        <a href="{{ url_for('google_login') }}" class="social-btn">
+            <i class="fa-brands fa-google"></i> Google
+        </a>
+        <a href="#" class="social-btn">
+            <i class="fa-brands fa-apple"></i> Apple
+        </a>
         
         <div class="admin-link">Are you a staff member? <a href="{{ url_for('login') }}">Admin Login</a></div>
     </div>
