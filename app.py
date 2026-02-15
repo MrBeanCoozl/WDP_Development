@@ -8,6 +8,7 @@ from sqlalchemy.pool import NullPool
 from datetime import datetime, timedelta
 from functools import wraps
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import random
 import os
 import json
@@ -248,7 +249,11 @@ class User(db.Model):
     custom_id = db.Column(db.String(50), unique=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False) 
+    
+    # CRITICAL: This separates Admins from Customers
+    # Values: 'Customer' vs 'SuperAdmin', 'Manager', 'Staff'
     role = db.Column(db.String(20), default='Staff') 
+    
     email = db.Column(db.String(120), unique=True, nullable=True)
     
     # --- CUSTOMER DETAILS ---
@@ -339,7 +344,7 @@ class Product(db.Model):
     sizes = db.Column(db.String(200))
 
 # ==============================================================================
-# SECTION 5: HELPER FUNCTIONS (Log Added)
+# SECTION 5: HELPER FUNCTIONS
 # ==============================================================================
 def log_action(actor_type, actor_id, action, entity_type, entity_id, status, description):
     try:
@@ -349,9 +354,79 @@ def log_action(actor_type, actor_id, action, entity_type, entity_id, status, des
     except Exception as e:
         db.session.rollback()
         print(f"Logging Failed: {e}")
-
-# ... (Previous helper functions remain the same) ...
-
+def seed_products():
+    """Adds dummy products to the database if none exist."""
+    if Product.query.count() == 0:
+        print("Seeding Database with Products...")
+        products = [
+            Product(
+                name="Classic White Tee", 
+                price=29.90, 
+                category="Casual", 
+                image_url="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="A staple for every wardrobe. Made from 100% organic cotton.",
+                stock=50, sizes="S,M,L,XL"
+            ),
+            Product(
+                name="Urban Denim Jacket", 
+                price=89.00, 
+                category="Casual", 
+                image_url="https://images.unsplash.com/photo-1551537482-f2075a1d41f2?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="Vintage wash denim jacket with a modern fit.",
+                stock=30, sizes="M,L,XL"
+            ),
+            Product(
+                name="Oxford Button-Down", 
+                price=59.50, 
+                category="Formal", 
+                image_url="https://images.unsplash.com/photo-1598033129183-c4f50c736f10?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="Crisp, clean, and professional. Perfect for the office.",
+                stock=40, sizes="S,M,L,XL"
+            ),
+            Product(
+                name="Slim Fit Chinos", 
+                price=49.90, 
+                category="Formal", 
+                image_url="https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="Versatile chinos that work for both casual and formal occasions.",
+                stock=45, sizes="30,32,34,36"
+            ),
+            Product(
+                name="Minimalist Sneakers", 
+                price=120.00, 
+                category="Shoes", 
+                image_url="https://images.unsplash.com/photo-1560769629-975ec94e6a86?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="Clean lines and premium leather for everyday comfort.",
+                stock=25, sizes="US 8,9,10,11"
+            ),
+            Product(
+                name="Leather Weekender", 
+                price=195.00, 
+                category="Accessories", 
+                image_url="https://images.unsplash.com/photo-1553062407-98eeb64c6a62?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="The perfect bag for short trips. Durable and stylish.",
+                stock=15, sizes="One Size"
+            ),
+            Product(
+                name="Summer Floral Dress", 
+                price=79.00, 
+                category="Casual", 
+                image_url="https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="Lightweight and breezy, perfect for warm weather.",
+                stock=35, sizes="S,M,L"
+            ),
+            Product(
+                name="Classic Chelsea Boots", 
+                price=145.00, 
+                category="Shoes", 
+                image_url="https://images.unsplash.com/photo-1638247025967-b4e38f787b76?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
+                description="Timeless style with durable construction.",
+                stock=20, sizes="US 8,9,10,11"
+            )
+        ]
+        db.session.add_all(products)
+        db.session.commit()
+        print("Products Added!")
 # ==============================================================================
 # SECTION 6: ROUTES (STORE & AUTH)
 # ==============================================================================
@@ -406,51 +481,37 @@ def store_shop():
 @app.route('/store/auth', methods=['GET', 'POST'])
 def store_auth():
     if g.user: return redirect(url_for('store_home'))
+    
     if request.method == 'POST':
         email = request.form.get('email').strip().lower()
         session['auth_email'] = email 
         user = User.query.filter_by(email=email).first()
         
         if user:
-            return redirect(url_for('store_login_password'))
-        else:
-            return redirect(url_for('store_signup_details'))
-            
-    return render_template('store_auth.html')
-
-@app.route('/store/login/password', methods=['GET', 'POST'])
-def store_login_password():
-    email = session.get('auth_email')
-    if not email: return redirect(url_for('store_auth'))
-    
-    if request.method == 'POST':
-        password = request.form.get('password')
-        user = User.query.filter_by(email=email).first()
-        
-        if user and user.password == password:
+            # SEPARATION CHECK:
+            # If the user exists but is NOT a customer (e.g., they are Staff/Admin),
+            # deny access to the store login and redirect to admin login.
             if user.role != 'Customer':
-                flash("This interface is for Customers only.", "danger")
-                return redirect(url_for('store_auth'))
-            
-            # --- 2FA LOGIN FLOW START ---
+                flash("Staff members must use the Admin Login Portal.", "warning")
+                return redirect(url_for('login'))
+                
+            # EXISTING CUSTOMER: Generate OTP & Redirect to Verify
             otp = f"{random.randint(100000, 999999)}"
             user.otp = otp
             user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
             db.session.commit()
             
             send_otp_email(email, otp)
-            print(f"\n[LOGIN 2FA OTP] Code for {email}: {otp}\n")
+            print(f"\n[LOGIN OTP] Code for {email}: {otp}\n")
             
-            # We don't log them in yet. We send them to Verify.
-            # verify page uses session['auth_email'] to find the user.
-            session['auth_email'] = user.email 
+            session['pending_user_id'] = user.id
             return redirect(url_for('store_verify'))
-            # --- 2FA LOGIN FLOW END ---
             
         else:
-            flash("Invalid password.", "danger")
+            # NEW USER: Redirect to Sign Up
+            return redirect(url_for('store_signup_details'))
             
-    return render_template('store_login.html', email=email)
+    return render_template('store_auth.html')
 
 @app.route('/store/signup', methods=['GET', 'POST'])
 def store_signup_details():
@@ -471,21 +532,26 @@ def store_signup_details():
             
         valid, msg = is_password_strong(password)
         if not valid:
-            flash(f"Security Warning: {msg}", "danger")
+            flash(f"Weak Password: {msg}", "danger")
             return render_template('store_signup.html', email=email, form_data=request.form)
             
         if User.query.filter_by(email=email).first():
-            flash("Account already exists. Please sign in.", "warning")
-            return redirect(url_for('store_login_password'))
+            flash("Account already exists. Redirecting to login...", "warning")
+            return redirect(url_for('store_auth'))
 
         try:
             count = User.query.count() + 1
             custom_id = f"CUST-{datetime.now().year}-{count:03d}"
             
+            # Hash Password for Professional Security
+            hashed_pw = generate_password_hash(password)
+            
             otp = f"{random.randint(100000, 999999)}"
             
+            # STRICTLY CREATE AS CUSTOMER ROLE
             new_user = User(
-                custom_id=custom_id, username=email, email=email, password=password,
+                custom_id=custom_id, username=email, email=email, 
+                password=hashed_pw, 
                 first_name=first_name, last_name=last_name, phone=phone, gender=gender,
                 role='Customer', auth_provider='local', otp=otp,
                 otp_expiry=datetime.utcnow() + timedelta(minutes=10),
@@ -496,27 +562,26 @@ def store_signup_details():
             
             send_otp_email(email, otp)
             print(f"\n[SIGNUP OTP] Code for {email}: {otp}\n")
+            
             session['pending_user_id'] = new_user.id 
             return redirect(url_for('store_verify'))
             
         except Exception as e:
             db.session.rollback()
-            flash(f"Error creating account: {str(e)}", "danger")
+            flash(f"System Error: {str(e)}", "danger")
             return render_template('store_signup.html', email=email, form_data=request.form)
             
     return render_template('store_signup.html', email=email, form_data={})
 
 @app.route('/store/verify', methods=['GET', 'POST'])
 def store_verify():
+    pending_id = session.get('pending_user_id')
     email = session.get('auth_email')
-    user = None
     
-    if 'pending_user_id' in session:
-        user = User.query.get(session['pending_user_id'])
-        email = user.email if user else email
-    elif email:
-        user = User.query.filter_by(email=email).first()
+    if not pending_id:
+        return redirect(url_for('store_auth'))
         
+    user = User.query.get(pending_id)
     if not user: return redirect(url_for('store_auth'))
     
     if request.method == 'POST':
@@ -531,29 +596,26 @@ def store_verify():
             session.pop('auth_email', None)
             session.pop('pending_user_id', None)
             
-            flash("Welcome to Shop.co.", "success")
+            flash(f"Welcome back, {user.first_name}!", "success")
             return redirect(url_for('store_home')) 
         else:
-            flash("Invalid or expired code.", "danger")
+            flash("Invalid or expired code. Please try again.", "danger")
             
-    return render_template('store_verify.html', email=email)
+    return render_template('store_verify.html', email=user.email)
 
 @app.route('/store/resend')
 def store_resend():
-    user = None
-    if 'pending_user_id' in session:
-        user = User.query.get(session['pending_user_id'])
-    elif session.get('auth_email'):
-        user = User.query.filter_by(email=session.get('auth_email')).first()
-
-    if user:
-        otp = f"{random.randint(100000, 999999)}"
-        user.otp = otp
-        user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
-        db.session.commit()
-        send_otp_email(user.email, otp)
-        print(f"\n[RESEND OTP] Code: {otp}\n")
-        flash("New code sent!", "success")
+    pending_id = session.get('pending_user_id')
+    if pending_id:
+        user = User.query.get(pending_id)
+        if user:
+            otp = f"{random.randint(100000, 999999)}"
+            user.otp = otp
+            user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+            db.session.commit()
+            send_otp_email(user.email, otp)
+            print(f"\n[RESEND OTP] Code: {otp}\n")
+            flash("New code sent!", "success")
     return redirect(url_for('store_verify'))
 
 # --- SOCIAL AUTH ---
@@ -596,6 +658,11 @@ def google_callback():
             flash("Account created via Google.", "info")
             return redirect(url_for('store_home'))
         
+        # Ensure only customers can use Google Login
+        if user.role != 'Customer':
+            flash("Staff accounts cannot use Social Login. Please use Admin Login.", "danger")
+            return redirect(url_for('login'))
+
         session['user_id'] = user.id
         flash("Successfully signed in with Google.", "success")
         return redirect(url_for('store_home'))
@@ -629,7 +696,6 @@ def update_profile():
     g.user.first_name = request.form.get('first_name')
     g.user.last_name = request.form.get('last_name')
     g.user.phone = request.form.get('phone')
-    g.user.gender = request.form.get('gender')
     if 'profile_image' in request.files:
         file = request.files['profile_image']
         if file and file.filename != '' and allowed_file(file.filename):
@@ -645,19 +711,33 @@ def security_update():
     if not g.user: return redirect(url_for('store_auth'))
     current_pw = request.form.get('current_password')
     new_pw = request.form.get('new_password')
+    
+    # 1. Validate Current Password
+    is_correct = False
+    if g.user.password.startswith('scrypt:'):
+         is_correct = check_password_hash(g.user.password, current_pw)
+    else:
+         is_correct = (g.user.password == current_pw)
+
     if current_pw and new_pw:
-        if g.user.password == current_pw:
+        if is_correct:
+            # 2. Validate New Password Strength
             valid, msg = is_password_strong(new_pw)
             if not valid:
                 flash(f"Security Error: {msg}", "danger")
             else:
+                # 3. Generate OTP & Send Email
                 otp = f"{random.randint(100000, 999999)}"
-                g.user.new_password_temp = new_pw
+                g.user.new_password_temp = generate_password_hash(new_pw)
                 g.user.otp = otp
                 g.user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
                 db.session.commit()
-                print(f"\n[SECURITY OTP] Code: {otp}\n")
-                flash(f"Verification code sent. Code: {otp} (Check Console)", "info")
+                
+                # SEND EMAIL HERE
+                send_otp_email(g.user.email, otp)
+                print(f"\n[SECURITY OTP] Code for {g.user.email}: {otp}\n")
+                
+                flash(f"Verification code sent to {g.user.email}", "info")
                 session['show_password_verify'] = True
         else:
             flash("Incorrect current password.", "danger")
@@ -675,8 +755,23 @@ def verify_security():
         session.pop('show_password_verify', None)
         flash("Password successfully changed.", "success")
     else:
-        flash("Invalid OTP.", "danger")
+        flash("Invalid or expired OTP.", "danger")
         session['show_password_verify'] = True
+    return redirect(url_for('store_profile'))
+
+@app.route('/store/profile/cancel_verify')
+def cancel_verify():
+    """Cancels the verification process and clears session flags."""
+    session.pop('show_password_verify', None)
+    session.pop('show_email_verify', None)
+    
+    if g.user:
+        g.user.otp = None
+        g.user.new_password_temp = None
+        g.user.new_email_temp = None
+        db.session.commit()
+        
+    flash("Verification cancelled.", "info")
     return redirect(url_for('store_profile'))
 
 @app.route('/store/profile/email_otp', methods=['POST'])
@@ -692,8 +787,10 @@ def request_email_change():
             g.user.otp = otp
             g.user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
             db.session.commit()
-            print(f"\n[OTP SENT] Code: {otp}\n")
-            flash(f"OTP sent for verification. Code: {otp} (Check Console)", "info")
+            
+            send_otp_email(g.user.email, otp)
+            
+            flash(f"OTP sent to your current email.", "info")
             session['show_email_verify'] = True
     return redirect(url_for('store_profile'))
 
@@ -734,6 +831,7 @@ def update_payment():
 
 @app.route('/cart', methods=['GET', 'POST'])
 def store_cart():
+    # Guests CAN access this and add items to session['cart']
     if 'cart' not in session: session['cart'] = {}
     if request.method == 'POST':
         p_id = request.form.get('product_id')
@@ -741,12 +839,23 @@ def store_cart():
         product = Product.query.get(p_id)
         if product:
             cart = session['cart']
-            if p_id in cart: cart[p_id]['qty'] += qty
+            # Convert to string for JSON serialization consistency
+            p_id_str = str(p_id) 
+            if p_id_str in cart: 
+                cart[p_id_str]['qty'] += qty
             else:
-                cart[p_id] = {'name': product.name, 'price': product.price, 'qty': qty, 'image': product.image_url, 'category': product.category}
+                cart[p_id_str] = {
+                    'name': product.name, 
+                    'price': product.price, 
+                    'qty': qty, 
+                    'image': product.image_url, 
+                    'category': product.category
+                }
             session.modified = True
             flash(f'Added {product.name} to cart!', 'success')
-        return redirect(url_for('store_cart'))
+        # Redirect back to the page they came from (Shop or Product)
+        return redirect(request.referrer or url_for('store_cart'))
+        
     totals = calculate_cart_totals(session['cart'])
     cart_items = []
     for p_id, item in session['cart'].items():
@@ -758,23 +867,33 @@ def store_cart():
 @app.route('/cart/update', methods=['POST'])
 def update_cart():
     if 'cart' not in session: return redirect(url_for('store_cart'))
-    p_id = request.form.get('product_id')
+    p_id = str(request.form.get('product_id'))
     action = request.form.get('action')
+    
     if p_id in session['cart']:
         if action == 'increase': session['cart'][p_id]['qty'] += 1
         elif action == 'decrease': session['cart'][p_id]['qty'] -= 1
         elif action == 'delete': del session['cart'][p_id]
-        if p_id in session['cart'] and session['cart'][p_id]['qty'] <= 0: del session['cart'][p_id]
+        
+        # Cleanup
+        if p_id in session['cart'] and session['cart'][p_id]['qty'] <= 0: 
+            del session['cart'][p_id]
+            
     session.modified = True
     return redirect(url_for('store_cart'))
 
 @app.route('/checkout', methods=['GET', 'POST'])
 def store_checkout():
+    # GUEST MODE RESTRICTION:
+    # If user is not logged in (g.user is None), deny checkout.
     if not g.user:
-        flash("Please sign in to checkout.", "warning")
+        flash("You are currently in Guest Mode. Please Sign In or Sign Up to checkout.", "info")
         return redirect(url_for('store_auth')) 
+        
     if not session.get('cart'): return redirect(url_for('store_shop'))
+    
     totals = calculate_cart_totals(session['cart'])
+    
     if request.method == 'POST':
         try:
             name = request.form.get('name', f"{g.user.first_name} {g.user.last_name}")
@@ -826,13 +945,15 @@ def login():
         username = request.form['username']
         password = request.form['password']
         user = User.query.filter_by(username=username).first()
+        
         if user and user.password == password:
+            # SEPARATION CHECK:
+            # Ensure Customers cannot use the Admin Panel login
             if user.role == 'Customer':
                 flash("Access Denied: Customers must use the Store Login.", "danger")
                 return redirect(url_for('store_auth'))
             
             session['user_id'] = user.id
-            # FIXED: Added Log Action
             log_action('Admin', user.username, 'Login', 'Auth', 'N/A', 'Success', 'Admin Panel Login')
             return redirect(url_for('dashboard'))
         flash("Invalid Admin Credentials", "danger")
@@ -935,6 +1056,7 @@ def create_admin():
         try:
             count = User.query.count() + 1
             custom_id = f"USR-{datetime.now().year}-{count:03d}"
+            # This allows creating admins with specific roles
             new_user = User(custom_id=custom_id, username=request.form['username'], password=request.form['password'], role=request.form['role'], must_change_password=True)
             db.session.add(new_user)
             db.session.commit()
@@ -1067,6 +1189,16 @@ if __name__ == '__main__':
         except: pass
         
         db.create_all()
+        
+                # --- SEED PRODUCTS ---
+        try:
+            seed_products()
+        except Exception as e:
+            print(f"Seeding Error: {e}")
+        # ---------------------
+        # --- REMOVED CLEANUP TASK TO PREVENT DELETION ---
+
+        # Ensure Default Admin Exists
         if not User.query.filter_by(username='admin').first():
             admin = User(username='admin', password='password123', role='SuperAdmin', custom_id='USR-ADMIN-001')
             db.session.add(admin)

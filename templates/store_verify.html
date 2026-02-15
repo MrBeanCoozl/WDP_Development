@@ -17,18 +17,18 @@
 
 <div class="auth-wrapper">
     <div class="auth-card">
-        <i class="fa-regular fa-envelope" style="font-size: 40px; margin-bottom: 20px;"></i>
-        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">Check your email</h2>
-        <p style="color: #666; font-size: 14px;">We sent a 6-digit code to<br><strong>{{ email }}</strong></p>
+        <i class="fa-solid fa-shield-halved" style="font-size: 40px; margin-bottom: 20px;"></i>
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">Verify Account</h2>
+        <p style="color: #666; font-size: 14px;">Enter the 6-digit security code sent to<br><strong>{{ email }}</strong></p>
 
         <form method="POST">
-            <input type="text" name="otp" class="otp-input" placeholder="123456" maxlength="6" required autofocus autocomplete="off">
-            <button type="submit" class="btn-auth">Verify & Login</button>
+            <input type="text" name="otp" class="otp-input" placeholder="000000" maxlength="6" required autofocus autocomplete="off">
+            <button type="submit" class="btn-auth">VERIFY & CONTINUE</button>
         </form>
 
         <div class="resend-container">
             <p>Didn't receive code?</p>
-            <a href="{{ url_for('store_resend') }}" id="resendBtn" class="resend-link disabled">Resend Email</a>
+            <a href="{{ url_for('store_resend') }}" id="resendBtn" class="resend-link disabled">Resend Code</a>
             <span id="timer"> (60s)</span>
         </div>
     </div>

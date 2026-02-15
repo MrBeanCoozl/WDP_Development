@@ -25,8 +25,8 @@
 
 <div class="auth-wrapper">
     <div class="auth-card">
-        <h2 style="font-size: 26px; font-weight: 900; margin-bottom: 10px; letter-spacing: -1px;">BECOME A MEMBER</h2>
-        <p style="color: #666; margin-bottom: 30px; font-size: 14px; line-height: 1.5;">Create your Shop.co Member profile and get first access to the very best of products, inspiration and community.</p>
+        <h2 style="font-size: 26px; font-weight: 900; margin-bottom: 10px; letter-spacing: -1px;">CREATE ACCOUNT</h2>
+        <p style="color: #666; margin-bottom: 30px; font-size: 14px; line-height: 1.5;">Finish setting up your account for <strong>{{ email }}</strong>.</p>
 
         <form method="POST" action="{{ url_for('store_signup_details') }}" id="signupForm">
             <div class="row">
@@ -56,8 +56,8 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label">Password</label>
-                <input type="password" id="password" name="password" class="form-input" required placeholder="Password">
+                <label class="form-label">Create Password</label>
+                <input type="password" id="password" name="password" class="form-input" required placeholder="Min 8 chars, 1 Uppercase, 1 Number">
                 <ul class="req-list">
                     <li id="req-len" class="req-item"><i class="fa-solid fa-circle"></i> Minimum 8 characters</li>
                     <li id="req-upper" class="req-item"><i class="fa-solid fa-circle"></i> Uppercase letter</li>
@@ -66,17 +66,13 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label">Re-enter Password</label>
-                <input type="password" id="confirm_password" name="confirm_password" class="form-input" required placeholder="Confirm Password">
+                <label class="form-label">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" class="form-input" required placeholder="Re-enter Password">
                 <div id="match-msg" class="match-msg" style="display: none;"></div>
             </div>
 
-            <button type="submit" id="submitBtn" class="btn-auth" disabled>JOIN US</button>
+            <button type="submit" id="submitBtn" class="btn-auth" disabled>CREATE & VERIFY</button>
         </form>
-        
-        <div style="text-align: center; margin-top: 25px;">
-            <p style="font-size: 12px; color: #666;">Already a member? <a href="{{ url_for('store_auth') }}" style="color: black; text-decoration: underline; font-weight: 600;">Sign In</a></p>
-        </div>
     </div>
 </div>
 
@@ -134,10 +130,8 @@
             el.classList.remove('invalid');
             icon.className = 'fa-solid fa-check';
         } else {
-            // Only show invalid state if user has started typing
             if (passwordInput.value.length > 0) {
                 el.classList.remove('valid');
-                // el.classList.add('invalid'); // Optional: Red text for invalid
             } else {
                 el.classList.remove('valid');
                 el.classList.remove('invalid');
