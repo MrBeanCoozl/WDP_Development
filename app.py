@@ -226,7 +226,8 @@ class Product(db.Model):
     description = db.Column(db.String(500))
     stock = db.Column(db.Integer, default=100)
     sales_count = db.Column(db.Integer, default=0)
-    sizes = db.Column(db.String(200)) # Stores "S,M,L" or "7,8,9,10"
+    # New Column for Sizes (Stored as comma-separated string e.g., "S,M,L")
+    sizes = db.Column(db.String(200))
 # Update Client to handle store users (Optional: Add password later for full login)
 # For now, we match by Email during checkout.
 # ==============================================================================
@@ -1405,58 +1406,61 @@ def store_home():
 # --- RESTRUCTURED STORE SHOP ROUTE ---
 @app.route('/shop')
 def store_shop():
+    # 1. Get Parameters
     search_query = request.args.get('q', '')
     category_filter = request.args.get('category', 'All') 
     sort_by = request.args.get('sort', 'newest')
+    
+    # Filter Parameters
     min_price = request.args.get('min_price', type=float)
     max_price = request.args.get('max_price', type=float)
-    
-    # Get selected sizes (list)
-    selected_sizes = request.args.getlist('size')
+    selected_sizes = request.args.getlist('size') # Receives multiple checkboxes
     
     page = request.args.get('page', 1, type=int)
     per_page = 12
 
-    # Query
+    # 2. Base Query
     query = Product.query
 
+    # 3. Apply Search
     if search_query:
         query = query.filter(Product.name.ilike(f'%{search_query}%'))
     
+    # 4. Apply Category (If not All)
     if category_filter != 'All':
         query = query.filter(Product.category == category_filter)
         
+    # 5. Apply Price Range
     if min_price is not None:
         query = query.filter(Product.price >= min_price)
     if max_price is not None:
         query = query.filter(Product.price <= max_price)
 
-    # Size Filtering Logic (Matches if product has ANY of the selected sizes)
+    # 6. Apply Size Filter
     if selected_sizes:
-        # This is a basic implementation. Ideally, use a many-to-many relationship.
-        # Here we check if the sizes string contains the selected size.
-        size_filters = []
+        # Create a list of filters: product must contain at least one of the selected sizes
+        size_conditions = []
         for size in selected_sizes:
-            size_filters.append(Product.sizes.ilike(f'%{size}%'))
-        from sqlalchemy import or_
-        query = query.filter(or_(*size_filters))
+            size_conditions.append(Product.sizes.ilike(f'%{size}%'))
+        query = query.filter(or_(*size_conditions))
 
-    # Sorting
+    # 7. Apply Sorting
     if sort_by == 'price_low':
         query = query.order_by(Product.price.asc())
     elif sort_by == 'price_high':
         query = query.order_by(Product.price.desc())
     elif sort_by == 'popularity':
         query = query.order_by(Product.sales_count.desc())
-    else:
+    else: # newest
         query = query.order_by(Product.id.desc())
 
+    # 8. Pagination
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     products = pagination.items
     
-    all_categories = ['Formal', 'Casual', 'Shoes', 'Accessories']
+    all_categories = ['Casual', 'Formal', 'Shoes', 'Accessories']
 
-    # Get Price Range for Slider
+    # Get DB min/max price for the slider bounds
     price_stats = db.session.query(func.min(Product.price), func.max(Product.price)).first()
     db_min_price = int(price_stats[0]) if price_stats[0] else 0
     db_max_price = int(price_stats[1]) if price_stats[1] else 500
@@ -1471,9 +1475,9 @@ def store_shop():
         search_query=search_query,
         current_min_price=min_price,
         current_max_price=max_price,
+        selected_sizes=selected_sizes,
         db_min_price=db_min_price,
-        db_max_price=db_max_price,
-        selected_sizes=selected_sizes
+        db_max_price=db_max_price
     )
 
 @app.route('/product/<int:product_id>')
@@ -1603,37 +1607,57 @@ def store_checkout():
 # --- UPDATE THE SEEDER IN APP.PY ---
 @app.route('/seed_products')
 def seed_products():
-    if Product.query.count() > 0: return "Database already populated."
+    if Product.query.count() > 0: return "Database already has products."
     
     products = []
 
-    # 1. FORMAL (Sizes: S, M, L, XL or 38, 40, 42)
-    formal_imgs = ["https://images.unsplash.com/photo-1600091106787-88069af720c2?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1598033129183-c4f50c736f10?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1473966968600-fa801b869a1a?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=600&auto=format&fit=crop"]
-    names = ["Signature Oxford Shirt", "Pleated Wool Trousers", "Classic Navy Blazer", "Silk Knit Tie"]
+    # 1. CASUAL (Sizes: XS, S, M, L, XL)
+    casual_imgs = [
+        "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1576871337622-98d48d1cf531?q=80&w=600&auto=format&fit=crop"
+    ]
+    names = ["Boxy Tee", "Utility Cargo", "Fleece Hoodie", "Denim Jacket"]
     for i in range(4):
-        products.append(Product(name=names[i], price=85.00+(i*20), category="Formal", image_url=formal_imgs[i], description="Timeless elegance.", sales_count=50, sizes="S,M,L,XL,XXL"))
+        products.append(Product(name=names[i], price=45.00+(i*10), category="Casual", image_url=casual_imgs[i], description="Casual staple.", sales_count=100+i, sizes="XS,S,M,L,XL"))
 
-    # 2. CASUAL (Sizes: S, M, L, XL)
-    casual_imgs = ["https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1576871337622-98d48d1cf531?q=80&w=600&auto=format&fit=crop"]
-    names = ["Heavyweight Boxy Tee", "Utility Cargo Pants", "Essential Fleece Hoodie", "Vintage Wash Denim"]
+    # 2. FORMAL (Sizes: S, M, L, XL, XXL)
+    formal_imgs = [
+        "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=600&auto=format&fit=crop"
+    ]
+    names = ["Oxford Shirt", "Pleated Trousers", "Navy Blazer", "Linen Suit"]
     for i in range(4):
-        products.append(Product(name=names[i], price=45.00+(i*10), category="Casual", image_url=casual_imgs[i], description="Effortless style.", sales_count=100, sizes="XS,S,M,L,XL"))
+        products.append(Product(name=names[i], price=85.00+(i*20), category="Formal", image_url=formal_imgs[i], description="Formal elegance.", sales_count=50+i, sizes="S,M,L,XL,XXL"))
 
     # 3. SHOES (Sizes: 7, 8, 9, 10, 11)
-    shoe_imgs = ["https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1614252369475-531eba835eb1?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?q=80&w=600&auto=format&fit=crop"]
-    names = ["Air Retro High OG", "Pro Performance Runner", "Suede Chelsea Boot", "Court Legacy Low"]
+    shoe_imgs = [
+        "https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1614252369475-531eba835eb1?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?q=80&w=600&auto=format&fit=crop"
+    ]
+    names = ["Air Retro High", "Pro Runners", "Suede Loafers", "Court Legacy"]
     for i in range(4):
-        products.append(Product(name=names[i], price=120.00+(i*15), category="Shoes", image_url=shoe_imgs[i], description="Engineered for comfort.", sales_count=200, sizes="7,8,9,10,11,12"))
+        products.append(Product(name=names[i], price=120.00+(i*15), category="Shoes", image_url=shoe_imgs[i], description="Premium footwear.", sales_count=200+i, sizes="7,8,9,10,11"))
 
     # 4. ACCESSORIES (Sizes: One Size)
-    acc_imgs = ["https://images.unsplash.com/photo-1588850561407-ed78c282e89b?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1553062407-98eeb64c6a62?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1511499767150-a48a237f0083?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=600&auto=format&fit=crop"]
-    names = ["NY Heritage Cap", "Leather Weekender Bag", "Classic Acetate Shades", "Minimalist Watch"]
+    acc_imgs = [
+        "https://images.unsplash.com/photo-1588850561407-ed78c282e89b?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1511499767150-a48a237f0083?q=80&w=600&auto=format&fit=crop",
+        "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=600&auto=format&fit=crop"
+    ]
+    names = ["Heritage Cap", "Leather Bag", "Classic Shades", "Minimalist Watch"]
     for i in range(4):
-        products.append(Product(name=names[i], price=35.00+(i*10), category="Accessories", image_url=acc_imgs[i], description="The perfect touch.", sales_count=80, sizes="One Size"))
+        products.append(Product(name=names[i], price=35.00+(i*10), category="Accessories", image_url=acc_imgs[i], description="Finishing touches.", sales_count=80+i, sizes="One Size"))
     
     db.session.add_all(products)
     db.session.commit()
-    return "Seeded database with Products & Sizes."
+    return "Seeded database with sizes."
 
 @app.route('/store_login')
 def store_login():

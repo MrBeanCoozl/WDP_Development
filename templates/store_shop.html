@@ -1,100 +1,83 @@
 {% extends "store_base.html" %}
 
-{% block title %}Shop Collection | Shop.co{% endblock %}
+{% block title %}Shop Collection{% endblock %}
 
 {% block content %}
 
-<div class="shop-header-bg">
-    <div class="container">
-        <h1 class="shop-main-title">The Collection</h1>
-        <p class="shop-sub-title">Explore our curated selection of premium essentials.</p>
-    </div>
-</div>
-
-<div class="container shop-layout-grid">
+<div class="container shop-container">
     
-    <aside class="shop-sidebar">
-        <div class="sidebar-content-sticky">
-            <div class="filter-header">
-                <h2>Filters</h2>
-                <a href="{{ url_for('store_shop') }}" class="clear-all-btn">Clear All</a>
+    <aside class="sidebar-wrapper">
+        <div class="sidebar-sticky-content">
+            
+            <div class="filter-group">
+                <h3 class="filter-title">Categories</h3>
+                <ul class="cat-list">
+                    <li><a href="{{ url_for('store_shop', category='All') }}" class="cat-link {% if current_cat == 'All' %}active{% endif %}">All Products</a></li>
+                    {% for cat in all_categories %}
+                    <li><a href="{{ url_for('store_shop', category=cat) }}" class="cat-link {% if current_cat == cat %}active{% endif %}">{{ cat }}</a></li>
+                    {% endfor %}
+                </ul>
             </div>
 
             <form action="{{ url_for('store_shop') }}" method="GET" id="filterForm">
-                <input type="hidden" name="q" value="{{ search_query }}">
+                <input type="hidden" name="category" value="{{ current_cat }}">
                 <input type="hidden" name="sort" value="{{ current_sort }}">
+                <input type="hidden" name="q" value="{{ search_query }}">
 
-                {% if current_cats or current_min_price or current_max_price %}
-                <div class="filter-section applied-filters">
-                    <h3>Applied Filters</h3>
-                    <div class="chip-list">
-                        {% for cat in current_cats %}
-                        <span class="filter-chip">{{ cat }} <i class="fa-solid fa-xmark" onclick="removeCat('{{ cat }}')"></i></span>
-                        {% endfor %}
-                        {% if current_min_price %}
-                        <span class="filter-chip">Min: ${{ current_min_price }} <i class="fa-solid fa-xmark" onclick="removePrice('min')"></i></span>
-                        {% endif %}
-                        {% if current_max_price %}
-                        <span class="filter-chip">Max: ${{ current_max_price }} <i class="fa-solid fa-xmark" onclick="removePrice('max')"></i></span>
-                        {% endif %}
+                <div class="filter-group">
+                    <h3 class="filter-title">Price Range</h3>
+                    <div class="range-slider">
+                        <input type="range" min="{{ db_min_price }}" max="{{ db_max_price }}" value="{{ current_min_price if current_min_price else db_min_price }}" id="slider-1" oninput="slideOne()">
+                        <input type="range" min="{{ db_min_price }}" max="{{ db_max_price }}" value="{{ current_max_price if current_max_price else db_max_price }}" id="slider-2" oninput="slideTwo()">
                     </div>
+                    <div class="price-inputs">
+                        <div class="price-field"><span>$</span><input type="number" name="min_price" id="range1" value="{{ current_min_price if current_min_price else db_min_price }}"></div>
+                        <span class="separator">-</span>
+                        <div class="price-field"><span>$</span><input type="number" name="max_price" id="range2" value="{{ current_max_price if current_max_price else db_max_price }}"></div>
+                    </div>
+                    <button type="submit" class="btn-apply">Apply</button>
                 </div>
-                {% endif %}
 
-                <div class="filter-section collapsible active">
-                    <h3 onclick="toggleSection(this)">Category <i class="fa-solid fa-chevron-down"></i></h3>
-                    <div class="section-content">
-                        {% for cat in all_categories %}
-                        <label class="checkbox-label">
-                            <input type="checkbox" name="category" value="{{ cat }}" 
-                                   {% if cat in current_cats %}checked{% endif %}
-                                   onchange="this.form.submit()">
-                            <span class="checkmark"></span>
-                            {{ cat }}
+                <div class="filter-group">
+                    <h3 class="filter-title">Size</h3>
+                    <div class="size-grid">
+                        {% set sizes = ['XS', 'S', 'M', 'L', 'XL', '7', '8', '9', '10', '11'] %}
+                        {% for size in sizes %}
+                        <label class="size-box">
+                            <input type="checkbox" name="size" value="{{ size }}" {% if size in selected_sizes %}checked{% endif %} onchange="this.form.submit()">
+                            <span class="size-text">{{ size }}</span>
                         </label>
                         {% endfor %}
                     </div>
                 </div>
 
-                <div class="filter-section collapsible active">
-                    <h3 onclick="toggleSection(this)">Price Range <i class="fa-solid fa-chevron-down"></i></h3>
-                    <div class="section-content">
-                        <div class="price-inputs">
-                            <div class="price-field">
-                                <span>$</span>
-                                <input type="number" name="min_price" placeholder="{{ db_min_price }}" value="{{ current_min_price }}" min="0">
-                            </div>
-                            <span class="separator">-</span>
-                            <div class="price-field">
-                                <span>$</span>
-                                <input type="number" name="max_price" placeholder="{{ db_max_price }}" value="{{ current_max_price }}" min="0">
-                            </div>
-                        </div>
-                        <button type="submit" class="apply-price-btn">Apply</button>
-                    </div>
+                <div class="filter-footer">
+                    <a href="{{ url_for('store_shop', category=current_cat) }}" class="btn-reset">Reset Filters</a>
                 </div>
             </form>
         </div>
     </aside>
 
-    <main class="shop-main-content">
-        <div class="shop-toolbar">
-            <span class="result-count">Showing {{ pagination.total }} results</span>
+    <main class="main-content">
+        <div class="shop-header animate-fade-down">
+            <div>
+                <h1 class="page-title">{{ current_cat }}</h1>
+                <p class="results-text">Showing {{ pagination.total }} items</p>
+            </div>
             <div class="sort-wrapper">
-                <label for="sortSelect">Sort by:</label>
-                <select id="sortSelect" onchange="updateSort(this.value)" class="sort-select">
+                <select onchange="updateSort(this.value)" class="sort-select">
                     <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest Arrivals</option>
-                    <option value="popularity" {% if current_sort == 'popularity' %}selected{% endif %}>Best Selling</option>
-                    <option value="price_low" {% if current_sort == 'price_low' %}selected{% endif %}>Price: Low to High</option>
-                    <option value="price_high" {% if current_sort == 'price_high' %}selected{% endif %}>Price: High to Low</option>
+                    <option value="popularity" {% if current_sort == 'popularity' %}selected{% endif %}>Most Popular</option>
+                    <option value="price_low" {% if current_sort == 'price_low' %}selected{% endif %}>Price: Low - High</option>
+                    <option value="price_high" {% if current_sort == 'price_high' %}selected{% endif %}>Price: High - Low</option>
                 </select>
             </div>
         </div>
 
         {% if products %}
-            <div class="product-grid-3-col">
+            <div class="product-grid">
                 {% for product in products %}
-                <div class="product-card">
+                <div class="product-card animate-fade-up" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
                     <div class="card-image-wrap">
                         <a href="{{ url_for('store_product', product_id=product.id) }}">
                             <img src="{{ product.image_url }}" alt="{{ product.name }}">
@@ -102,209 +85,122 @@
                         <form action="{{ url_for('store_cart') }}" method="POST">
                             <input type="hidden" name="product_id" value="{{ product.id }}">
                             <input type="hidden" name="quantity" value="1">
-                            <button type="submit" class="quick-add-icon" title="Add to Cart">
-                                <i class="fa-solid fa-plus"></i>
-                            </button>
+                            <button type="submit" class="quick-add-btn"><i class="fa-solid fa-plus"></i></button>
                         </form>
-                        {% if product.sales_count > 300 %}
-                            <span class="badge-hot">Hot</span>
-                        {% endif %}
+                        {% if product.sales_count > 150 %}<span class="badge-hot">Hot</span>{% endif %}
                     </div>
-                    <a href="{{ url_for('store_product', product_id=product.id) }}" class="card-info">
+                    <div class="card-details">
                         <div class="card-cat">{{ product.category }}</div>
                         <h3 class="card-name">{{ product.name }}</h3>
-                        <div class="card-meta">
-                            <span class="card-rating">
-                                <i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i><i class="fa-solid fa-star"></i>
-                            </span>
-                            <span class="card-sold">{{ product.sales_count }} sold</span>
-                        </div>
                         <div class="card-price">${{ "%.2f"|format(product.price) }}</div>
-                    </a>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
 
-            <div class="pagination-container">
+            <div class="pagination animate-fade-up" style="animation-delay: 0.5s;">
                 {% if pagination.has_prev %}
-                <a href="{{ url_for('store_shop', page=pagination.prev_num, **request.args) }}" class="page-btn prev">
-                    <i class="fa-solid fa-chevron-left"></i>
-                </a>
+                    <a href="{{ url_for('store_shop', page=pagination.prev_num, category=current_cat, sort=current_sort, q=search_query, min_price=current_min_price, max_price=current_max_price, size=selected_sizes) }}" class="page-btn"><i class="fa-solid fa-chevron-left"></i></a>
                 {% endif %}
-                
-                <div class="page-numbers">
-                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=1) %}
-                        {% if page_num %}
-                            {% if pagination.page == page_num %}
-                                <span class="page-num active">{{ page_num }}</span>
-                            {% else %}
-                                <a href="{{ url_for('store_shop', page=page_num, **request.args) }}" class="page-num">{{ page_num }}</a>
-                            {% endif %}
-                        {% else %}
-                            <span class="page-ellipsis">...</span>
-                        {% endif %}
-                    {% endfor %}
-                </div>
-
+                <span class="page-info">Page {{ pagination.page }} of {{ pagination.pages }}</span>
                 {% if pagination.has_next %}
-                <a href="{{ url_for('store_shop', page=pagination.next_num, **request.args) }}" class="page-btn next">
-                    <i class="fa-solid fa-chevron-right"></i>
-                </a>
+                    <a href="{{ url_for('store_shop', page=pagination.next_num, category=current_cat, sort=current_sort, q=search_query, min_price=current_min_price, max_price=current_max_price, size=selected_sizes) }}" class="page-btn"><i class="fa-solid fa-chevron-right"></i></a>
                 {% endif %}
             </div>
-
         {% else %}
-            <div class="no-results">
-                <h3>No products found.</h3>
-                <p>Try adjusting your filters.</p>
-                <a href="{{ url_for('store_shop') }}" class="btn-reset">Clear All Filters</a>
+            <div class="no-results animate-fade-up">
+                <h3>No items found</h3>
+                <a href="{{ url_for('store_shop', category='All') }}" class="btn-home">Clear Filters</a>
             </div>
         {% endif %}
     </main>
 </div>
 
 <script>
-    // Toggle collapsible filter sections
-    function toggleSection(header) {
-        header.parentElement.classList.toggle('active');
-    }
-
-    // Update sort order by submitting the form
-    function updateSort(value) {
-        const form = document.getElementById('filterForm');
-        const sortInput = form.querySelector('input[name="sort"]');
-        sortInput.value = value;
-        form.submit();
-    }
-
-    // Remove a category chip
-    function removeCat(catToRemove) {
-        const form = document.getElementById('filterForm');
-        const checkboxes = form.querySelectorAll('input[name="category"]');
-        checkboxes.forEach(cb => {
-            if (cb.value === catToRemove) {
-                cb.checked = false;
-            }
-        });
-        form.submit();
-    }
-
-    // Remove a price chip
-    function removePrice(type) {
-        const form = document.getElementById('filterForm');
-        const input = form.querySelector(`input[name="${type}_price"]`);
-        input.value = '';
-        form.submit();
-    }
+    function updateSort(val) { document.getElementById('filterForm').querySelector('input[name="sort"]').value = val; document.getElementById('filterForm').submit(); }
+    let sliderOne = document.getElementById("slider-1"); let sliderTwo = document.getElementById("slider-2");
+    let displayValOne = document.getElementById("range1"); let displayValTwo = document.getElementById("range2");
+    let minGap = 10;
+    function slideOne() { if (parseInt(sliderTwo.value) - parseInt(sliderOne.value) <= minGap) { sliderOne.value = parseInt(sliderTwo.value) - minGap; } displayValOne.value = sliderOne.value; }
+    function slideTwo() { if (parseInt(sliderTwo.value) - parseInt(sliderOne.value) <= minGap) { sliderTwo.value = parseInt(sliderOne.value) + minGap; } displayValTwo.value = sliderTwo.value; }
 </script>
 
 <style>
-    /* --- SHOP PAGE STYLES --- */
-    :root { --border-color: #e5e5e5; --text-light: #777; }
+    /* Layout */
+    .shop-container { display: grid; grid-template-columns: 260px 1fr; gap: 60px; padding-top: 30px; padding-bottom: 60px; align-items: start; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
+
+    /* Animations */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-up { animation: fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+    .animate-fade-down { animation: fadeDown 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+
+    /* Sticky Sidebar with Hidden Scrollbar */
+    .sidebar-wrapper {
+        position: sticky; top: 100px; 
+        height: calc(100vh - 100px); 
+        overflow-y: auto; padding-right: 10px;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none;  /* IE */
+    }
+    .sidebar-wrapper::-webkit-scrollbar { display: none; /* Chrome/Safari */ }
+
+    /* Filter Styles */
+    .filter-group { margin-bottom: 40px; }
+    .filter-title { font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 20px; color: #111; border-bottom: 1px solid #eee; padding-bottom: 10px; }
     
-    .shop-header-bg { background: #f9f9f9; padding: 60px 0; margin-bottom: 40px; text-align: center; border-bottom: 1px solid var(--border-color); }
-    .shop-main-title { font-size: 36px; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; margin: 0 0 10px; }
-    .shop-sub-title { color: var(--text-light); font-size: 14px; margin: 0; }
+    .cat-list { list-style: none; padding: 0; }
+    .cat-link { font-size: 14px; color: #666; display: block; padding: 6px 0; transition: 0.2s; }
+    .cat-link:hover, .cat-link.active { color: black; font-weight: 600; }
 
-    /* Layout Grid */
-    .shop-layout-grid { display: grid; grid-template-columns: 240px 1fr; gap: 40px; align-items: start; padding-bottom: 60px; }
-    
-    /* --- SIDEBAR --- */
-    .shop-sidebar { position: relative; }
-    .sidebar-content-sticky { position: sticky; top: 100px; max-height: 80vh; overflow-y: auto; padding-right: 10px; }
-    /* Custom scrollbar for sidebar */
-    .sidebar-content-sticky::-webkit-scrollbar { width: 4px; }
-    .sidebar-content-sticky::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+    /* Price Slider */
+    .range-slider { position: relative; height: 4px; background: #e5e5e5; border-radius: 5px; margin: 25px 0 20px; }
+    .range-slider input[type="range"] { position: absolute; top: -6px; width: 100%; background: none; pointer-events: none; -webkit-appearance: none; }
+    .range-slider input[type="range"]::-webkit-slider-thumb { height: 16px; width: 16px; border-radius: 50%; background: black; pointer-events: auto; -webkit-appearance: none; cursor: pointer; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+    .price-inputs { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
+    .price-field { display: flex; align-items: center; border: 1px solid #e5e5e5; padding: 8px 12px; border-radius: 6px; font-size: 13px; flex: 1; background: #fff; }
+    .price-field input { width: 100%; border: none; outline: none; margin-left: 5px; font-weight: 500; }
+    .btn-apply { width: 100%; background: black; color: white; border: none; padding: 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; border-radius: 6px; cursor: pointer; }
 
-    .filter-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); }
-    .filter-header h2 { font-size: 18px; font-weight: 700; margin: 0; text-transform: uppercase; }
-    .clear-all-btn { font-size: 12px; color: var(--text-light); text-decoration: underline; cursor: pointer; }
-    .clear-all-btn:hover { color: black; }
+    /* Size Grid */
+    .size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .size-box input { display: none; }
+    .size-text { display: flex; align-items: center; justify-content: center; height: 40px; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; transition: 0.2s; background: #fff; }
+    .size-box:hover .size-text { border-color: #999; color: black; }
+    .size-box input:checked + .size-text { background: black; color: white; border-color: black; }
 
-    .filter-section { margin-bottom: 25px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; }
-    .filter-section:last-child { border-bottom: none; }
-    .filter-section h3 { font-size: 14px; font-weight: 700; text-transform: uppercase; margin: 0 0 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-    .filter-section h3 i { font-size: 10px; transition: transform 0.3s; }
-    
-    /* Collapsible Logic */
-    .filter-section.collapsible .section-content { display: none; }
-    .filter-section.collapsible.active .section-content { display: block; }
-    .filter-section.collapsible.active h3 i { transform: rotate(180deg); }
+    .btn-reset { display: block; width: 100%; text-align: center; font-size: 13px; text-decoration: none; color: #555; border: 1px solid #e5e5e5; padding: 10px; border-radius: 6px; margin-top: 30px; background: #f9f9f9; }
+    .btn-reset:hover { background: #eee; color: black; }
 
-    /* Checkboxes */
-    .checkbox-label { display: flex; align-items: center; position: relative; padding-left: 28px; margin-bottom: 12px; cursor: pointer; font-size: 14px; color: #333; user-select: none; }
-    .checkbox-label input { position: absolute; opacity: 0; cursor: pointer; height: 0; width: 0; }
-    .checkmark { position: absolute; top: 0; left: 0; height: 18px; width: 18px; background-color: #fff; border: 1px solid #ccc; border-radius: 3px; transition: 0.2s; }
-    .checkbox-label:hover input ~ .checkmark { border-color: #999; }
-    .checkbox-label input:checked ~ .checkmark { background-color: black; border-color: black; }
-    .checkmark:after { content: ""; position: absolute; display: none; }
-    .checkbox-label input:checked ~ .checkmark:after { display: block; left: 6px; top: 2px; width: 5px; height: 10px; border: solid white; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+    /* Main Content */
+    .shop-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; border-bottom: 1px solid #f0f0f0; padding-bottom: 20px; }
+    .page-title { font-size: 36px; font-weight: 800; text-transform: uppercase; margin: 0; line-height: 1; }
+    .results-text { color: #777; font-size: 13px; margin: 5px 0 0; }
+    .sort-select { padding: 10px 15px; border: 1px solid #e5e5e5; font-size: 13px; border-radius: 6px; outline: none; cursor: pointer; background: white; }
 
-    /* Price Inputs */
-    .price-inputs { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .price-field { flex: 1; display: flex; align-items: center; border: 1px solid #ddd; padding: 0 10px; border-radius: 4px; background: #fff; }
-    .price-field span { color: #999; font-size: 13px; }
-    .price-field input { width: 100%; border: none; outline: none; padding: 8px 5px; font-size: 13px; }
-    .apply-price-btn { width: 100%; background: black; color: white; border: none; padding: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; cursor: pointer; border-radius: 4px; }
-    .apply-price-btn:hover { opacity: 0.9; }
-
-    /* Applied Filter Chips */
-    .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
-    .filter-chip { background: #f0f0f0; color: #333; font-size: 12px; padding: 6px 10px; border-radius: 20px; display: flex; align-items: center; gap: 6px; }
-    .filter-chip i { cursor: pointer; font-size: 10px; color: #999; transition: 0.2s; }
-    .filter-chip i:hover { color: black; }
-
-    /* --- MAIN CONTENT --- */
-    .shop-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--border-color); font-size: 13px; color: var(--text-light); }
-    .sort-wrapper { display: flex; align-items: center; gap: 10px; }
-    .sort-select { padding: 6px 10px; border: 1px solid #ddd; border-radius: 4px; outline: none; cursor: pointer; font-family: inherit; font-size: 13px; }
-
-    /* Product Grid (3 Columns) */
-    .product-grid-3-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-bottom: 50px; }
-
-    /* --- COPIED CARD STYLES (from Home) --- */
-    .product-card { background: transparent; transition: transform 0.3s ease; border-radius: 4px; }
+    .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-bottom: 60px; }
+    .product-card { background: transparent; transition: transform 0.3s ease; }
     .product-card:hover { transform: translateY(-5px); }
-    .card-image-wrap { position: relative; aspect-ratio: 4/5; background: #f0f0f0; overflow: hidden; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: 0.3s; }
-    .product-card:hover .card-image-wrap { box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
-    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.7s ease; }
+    .card-image-wrap { position: relative; aspect-ratio: 4/5; background: #f0f0f0; overflow: hidden; border-radius: 6px; margin-bottom: 15px; }
+    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; transition: 0.7s; }
     .product-card:hover img { transform: scale(1.08); }
-    .card-info { padding: 12px 0; display: block; text-align: center; color: inherit; }
-    .card-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #999; margin-bottom: 4px; letter-spacing: 1px; }
-    .card-name { font-size: 14px; font-weight: 600; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #111; }
-    .card-rating { font-size: 10px; color: #FFD700; margin-bottom: 0; }
-    .card-sold { font-weight: 700; color: #777; margin-left: 5px; }
-    .card-meta { display: flex; justify-content: center; align-items: center; gap: 5px; font-size: 10px; margin-bottom: 5px; }
-    .card-price { font-size: 14px; font-weight: 800; color: #111; }
-    .quick-add-icon { position: absolute; bottom: 15px; right: 15px; width: 32px; height: 32px; border-radius: 50%; background: white; color: black; border: none; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(10px) scale(0.9); transition: all 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .quick-add-icon:hover { background: black; color: white; }
-    .product-card:hover .quick-add-icon { opacity: 1; transform: translateY(0) scale(1); }
-    .badge-hot { position: absolute; top: 10px; left: 10px; background: #e11d48; color: white; padding: 4px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .quick-add-btn { position: absolute; bottom: 15px; right: 15px; width: 35px; height: 35px; border-radius: 50%; background: white; border: none; display: flex; align-items: center; justify-content: center; opacity: 0; transform: translateY(10px); transition: 0.3s; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+    .product-card:hover .quick-add-btn { opacity: 1; transform: translateY(0); }
+    .card-name { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+    .card-cat { font-size: 11px; font-weight: 700; color: #999; margin-bottom: 6px; text-transform: uppercase; }
+    
+    .pagination { display: flex; justify-content: center; align-items: center; gap: 15px; }
+    .page-btn { width: 40px; height: 40px; border: 1px solid #e5e5e5; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+    .page-btn:hover { background: #111; border-color: #111; color: white; }
 
-    /* --- PAGINATION --- */
-    .pagination-container { display: flex; justify-content: center; align-items: center; gap: 15px; margin-top: 40px; }
-    .page-btn { width: 40px; height: 40px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #333; transition: 0.2s; }
-    .page-btn:hover { background: #f0f0f0; border-color: #ccc; }
-    .page-numbers { display: flex; gap: 5px; }
-    .page-num { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 14px; color: #555; transition: 0.2s; }
-    .page-num:hover { background: #f9f9f9; color: black; }
-    .page-num.active { background: black; color: white; font-weight: 700; }
-    .page-ellipsis { display: flex; align-items: flex-end; padding: 0 5px; color: #999; }
-
-    /* No Results */
-    .no-results { text-align: center; padding: 100px 0; color: #555; }
-    .btn-reset { display: inline-block; background: black; color: white; padding: 10px 20px; font-size: 13px; font-weight: 700; border-radius: 4px; margin-top: 20px; }
-
-    /* Responsive */
     @media (max-width: 992px) {
-        .shop-layout-grid { grid-template-columns: 1fr; gap: 30px; }
-        .shop-sidebar { margin-bottom: 40px; }
-        .sidebar-content-sticky { position: static; max-height: none; }
-        .product-grid-3-col { grid-template-columns: repeat(2, 1fr); }
+        .shop-container { grid-template-columns: 1fr; }
+        .sidebar-wrapper { position: static; height: auto; margin-bottom: 40px; padding-right: 0; }
+        .product-grid { grid-template-columns: repeat(2, 1fr); }
     }
     @media (max-width: 600px) {
-        .shop-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
-        .sort-wrapper { width: 100%; justify-content: space-between; }
+        .product-grid { grid-template-columns: 1fr; }
     }
 </style>
 

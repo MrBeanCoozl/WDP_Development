@@ -6,21 +6,17 @@
     <title>{% block title %}Shop.co{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* --- PREMIUM VARIABLES --- */
+        /* --- VARIABLES --- */
         :root {
             --font-main: 'Inter', sans-serif;
             --bg-body: #ffffff;
-            --bg-card: #f4f4f5;
             --text-primary: #111;
             --text-secondary: #71717a;
-            --accent: #000;
             --border: #e4e4e7;
-            --radius-sm: 4px;
-            --radius-md: 8px;
             --nav-height: 70px;
             --transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
@@ -50,185 +46,276 @@
             height: var(--nav-height);
             display: flex; align-items: center; justify-content: space-between;
             padding: 0 40px;
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(12px);
             border-bottom: 1px solid rgba(0,0,0,0.05);
-            position: sticky; top: 0; z-index: 999;
+            position: sticky; top: 0; z-index: 1000;
         }
         
         .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
 
-        .search-wrapper { flex: 1; max-width: 500px; margin: 0 40px; }
-        .search-bar {
-            display: flex; align-items: center;
-            background: #f4f4f5; border-radius: 99px; padding: 8px 16px;
-            transition: var(--transition);
+        .nav-center { display: flex; gap: 30px; height: 100%; align-items: center; }
+        .nav-item { position: relative; height: 100%; display: flex; align-items: center; cursor: pointer; font-size: 13px; font-weight: 600; }
+        .nav-item i { margin-left: 5px; font-size: 11px; transition: transform 0.3s; }
+        .nav-item:hover i { transform: rotate(180deg); }
+        
+        .dropdown-menu {
+            position: absolute; top: var(--nav-height); left: 50%; transform: translateX(-50%);
+            background: white; border: 1px solid #e5e5e5; border-top: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            width: 200px; padding: 10px 0;
+            opacity: 0; visibility: hidden; transition: all 0.2s ease;
+            display: flex; flex-direction: column;
         }
-        .search-bar:focus-within { background: #fff; box-shadow: 0 0 0 1px #000 inset; }
-        .search-bar input {
-            border: none; background: transparent; outline: none; width: 100%;
-            font-size: 13px; font-weight: 500; color: var(--text-primary);
-        }
+        .nav-item:hover .dropdown-menu { opacity: 1; visibility: visible; }
+        .dropdown-link { padding: 10px 20px; font-size: 13px; color: #555; font-weight: 500; }
+        .dropdown-link:hover { background: #f9f9f9; color: black; padding-left: 25px; }
+
+        .search-wrapper { flex: 1; max-width: 400px; margin: 0 40px; }
+        .search-bar { display: flex; align-items: center; background: #f4f4f5; border-radius: 99px; padding: 8px 16px; }
+        .search-bar input { border: none; background: transparent; outline: none; width: 100%; font-size: 13px; font-weight: 500; }
 
         .nav-links { display: flex; gap: 20px; align-items: center; }
         .nav-icon { font-size: 18px; position: relative; padding: 5px; }
         .nav-icon:hover { opacity: 0.6; }
-        .badge {
-            position: absolute; top: 0; right: 0;
-            background: #000; color: #fff;
-            font-size: 9px; font-weight: 700; height: 14px; width: 14px;
-            display: flex; align-items: center; justify-content: center;
-            border-radius: 50%;
-        }
+        .badge { position: absolute; top: -2px; right: -2px; background: #000; color: #fff; font-size: 9px; font-weight: 700; height: 14px; width: 14px; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 
-        /* --- PRODUCT CARD (The "Premium" Look) --- */
-        .product-grid {
+        /* --- UI UTILS --- */
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
+        .btn { background: #000; color: #fff; border: none; padding: 12px 24px; font-size: 13px; font-weight: 600; text-transform: uppercase; border-radius: 99px; cursor: pointer; transition: var(--transition); }
+        .btn:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+
+        /* --- PREMIUM FOOTER STYLES --- */
+        footer { 
+            background: #fff; 
+            padding-top: 80px; 
+            margin-top: auto; 
+            border-top: 1px solid #e5e5e5; 
+        }
+        
+        .footer-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); /* Smaller cards */
-            gap: 20px 20px;
-        }
-        
-        .product-card {
-            group: product; cursor: pointer; position: relative;
-        }
-        
-        .card-image-wrapper {
-            background: #f0f0f0; border-radius: var(--radius-sm);
-            overflow: hidden; aspect-ratio: 3/4; position: relative;
-        }
-        
-        .card-image {
-            width: 100%; height: 100%; object-fit: cover;
-            transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-        }
-        
-        /* Hover Effect: Zoom Image */
-        .product-card:hover .card-image { transform: scale(1.08); }
-        
-        /* Hover Effect: Quick Add Button */
-        .quick-add-btn {
-            position: absolute; bottom: 10px; left: 10px; right: 10px;
-            background: rgba(255,255,255,0.95); color: black;
-            font-size: 12px; font-weight: 600; text-transform: uppercase;
-            padding: 12px; border: none; border-radius: 4px;
-            transform: translateY(20px); opacity: 0;
-            transition: all 0.3s ease;
-            cursor: pointer; text-align: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .quick-add-btn:hover { background: #000; color: #fff; }
-        
-        .product-card:hover .quick-add-btn {
-            transform: translateY(0); opacity: 1;
+            grid-template-columns: 1fr 1fr 1fr 1.5fr; /* Wider column for newsletter */
+            gap: 40px;
+            margin-bottom: 80px;
         }
 
-        .card-details { margin-top: 12px; }
-        .card-title { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
-        .card-category { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px; }
-        .card-price { font-size: 13px; font-weight: 500; }
+        .footer-col h4 {
+            font-size: 14px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 25px 0;
+            color: #000;
+        }
 
-        /* --- GENERAL UI --- */
-        .container { max-width: 1400px; margin: 0 auto; padding: 40px; }
-        
-        .btn {
-            background: #000; color: #fff; border: none; padding: 14px 28px;
-            font-size: 13px; font-weight: 600; text-transform: uppercase;
-            border-radius: 99px; cursor: pointer; transition: var(--transition);
+        .footer-links li {
+            margin-bottom: 12px;
         }
-        .btn:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
-        
-        /* --- TOAST NOTIFICATIONS --- */
-        .toast-container {
-            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            z-index: 2000; display: flex; flex-direction: column; gap: 10px;
-        }
-        .toast {
-            background: rgba(0,0,0,0.9); color: white;
-            padding: 12px 24px; border-radius: 99px;
-            font-size: 13px; font-weight: 500;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            animation: slideUp 0.4s ease forwards;
-        }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-        footer { background: #f9f9f9; padding: 60px 40px 20px; margin-top: auto; border-top: 1px solid var(--border); }
+        .footer-links a {
+            font-size: 14px;
+            color: #111;
+            font-weight: 400;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: #666;
+            text-decoration: underline;
+            text-underline-offset: 4px;
+        }
+
+        /* Newsletter Input */
+        .newsletter-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .input-group {
+            position: relative;
+            width: 100%;
+        }
+
+        .newsletter-input {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #000;
+            font-size: 14px;
+            font-family: var(--font-main);
+            outline: none;
+            background: transparent;
+            box-sizing: border-box;
+        }
+
+        .subscribe-btn {
+            width: 100%;
+            background: #000;
+            color: #fff;
+            border: none;
+            padding: 15px;
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .subscribe-btn:hover {
+            opacity: 0.8;
+        }
+
+        .social-icons {
+            display: flex;
+            gap: 20px;
+            margin-top: 25px;
+        }
+
+        .social-icons a {
+            font-size: 20px;
+            color: #000;
+        }
+
+        /* Bottom Bar */
+        .footer-bottom {
+            border-top: 1px solid #e5e5e5;
+            padding: 30px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #111;
+        }
+
+        .legal-links {
+            display: flex;
+            gap: 30px;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .footer-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 50px 20px;
+            }
+            .newsletter-col {
+                grid-column: span 2;
+            }
+        }
+        @media (max-width: 600px) {
+            .footer-grid {
+                grid-template-columns: 1fr;
+            }
+            .newsletter-col {
+                grid-column: span 1;
+            }
+            .footer-bottom {
+                flex-direction: column;
+                gap: 20px;
+                text-align: center;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="announcement-bar">
-        Free Worldwide Shipping on Orders Over $150 &nbsp; • &nbsp; 30-Day Returns
-    </div>
+    <div class="announcement-bar">Free Worldwide Shipping on Orders Over $150</div>
 
     <nav class="store-nav">
         <a href="{{ url_for('home') }}" class="logo">SHOP.CO</a>
-
+        <div class="nav-center">
+            <a href="{{ url_for('home') }}" class="nav-item">Home</a>
+            <div class="nav-item">
+                Shop <i class="fa-solid fa-chevron-down"></i>
+                <div class="dropdown-menu">
+                    <a href="{{ url_for('store_shop', category='All') }}" class="dropdown-link">All Products</a>
+                    <a href="{{ url_for('store_shop', category='Formal') }}" class="dropdown-link">Formal Edit</a>
+                    <a href="{{ url_for('store_shop', category='Casual') }}" class="dropdown-link">Casual Wear</a>
+                    <a href="{{ url_for('store_shop', category='Shoes') }}" class="dropdown-link">Footwear</a>
+                    <a href="{{ url_for('store_shop', category='Accessories') }}" class="dropdown-link">Accessories</a>
+                </div>
+            </div>
+        </div>
         <div class="search-wrapper">
             <form action="{{ url_for('store_shop') }}" method="GET" class="search-bar">
-                <i class="fa-solid fa-magnifying-glass" style="color: #999; margin-right: 10px; font-size: 12px;"></i>
+                <i class="fa-solid fa-magnifying-glass" style="color: #999; margin-right: 10px;"></i>
                 <input type="text" name="q" placeholder="Search..." value="{{ request.args.get('q', '') }}">
             </form>
         </div>
-
         <div class="nav-links">
-            <a href="{{ url_for('store_shop') }}" class="nav-icon"><i class="fa-solid fa-shop"></i></a>
             <a href="{{ url_for('store_login') }}" class="nav-icon"><i class="fa-regular fa-user"></i></a>
             <a href="{{ url_for('store_cart') }}" class="nav-icon">
                 <i class="fa-solid fa-bag-shopping"></i>
-                {% if cart_count > 0 %}
-                    <span class="badge">{{ cart_count }}</span>
-                {% endif %}
+                {% if cart_count > 0 %}<span class="badge">{{ cart_count }}</span>{% endif %}
             </a>
         </div>
     </nav>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="toast-container">
-                {% for category, message in messages %}
-                    <div class="toast">{{ message }}</div>
-                {% endfor %}
-            </div>
-            <script>
-                setTimeout(() => {
-                    const toasts = document.querySelector('.toast-container');
-                    if(toasts) toasts.style.display = 'none';
-                }, 3500);
-            </script>
-        {% endif %}
-    {% endwith %}
-
     {% block content %}{% endblock %}
 
     <footer>
-        <div class="container" style="padding: 0;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 40px; margin-bottom: 60px;">
-                <div>
-                    <h5 style="font-weight: 700; margin-bottom: 20px;">Support</h5>
-                    <ul style="font-size: 13px; color: #666; line-height: 2;">
-                        <li><a href="#">Contact Us</a></li>
-                        <li><a href="#">Shipping</a></li>
-                        <li><a href="#">Returns</a></li>
+        <div class="container" style="padding: 0 40px;">
+            <div class="footer-grid">
+                <div class="footer-col">
+                    <h4>Shop</h4>
+                    <ul class="footer-links">
+                        <li><a href="{{ url_for('store_shop', category='All', sort='newest') }}">New Arrivals</a></li>
+                        <li><a href="{{ url_for('store_shop', category='All', sort='popularity') }}">Best Sellers</a></li>
+                        <li><a href="{{ url_for('store_shop', category='Casual') }}">Clothing</a></li>
+                        <li><a href="{{ url_for('store_shop', category='Shoes') }}">Shoes</a></li>
+                        <li><a href="{{ url_for('store_shop', category='Accessories') }}">Accessories</a></li>
                     </ul>
                 </div>
-                <div>
-                    <h5 style="font-weight: 700; margin-bottom: 20px;">Company</h5>
-                    <ul style="font-size: 13px; color: #666; line-height: 2;">
-                        <li><a href="#">About</a></li>
+
+                <div class="footer-col">
+                    <h4>Corporate</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">About Us</a></li>
                         <li><a href="#">Careers</a></li>
-                        <li><a href="{{ url_for('login') }}">Admin Login</a></li>
+                        <li><a href="#">Sustainability</a></li>
+                        <li><a href="#">Press</a></li>
+                        <li><a href="#">Affiliates</a></li>
                     </ul>
                 </div>
-                <div>
-                    <h5 style="font-weight: 700; margin-bottom: 20px;">Newsletter</h5>
-                    <p style="font-size: 13px; color: #666; margin-bottom: 15px;">Subscribe for exclusive drops.</p>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="email" placeholder="Email" style="border: 1px solid #ddd; padding: 8px; font-size: 13px; flex: 1;">
-                        <button style="background: black; color: white; border: none; font-size: 11px; padding: 0 15px; font-weight: 700;">JOIN</button>
+
+                <div class="footer-col">
+                    <h4>Support</h4>
+                    <ul class="footer-links">
+                        <li><a href="#">Contact Us</a></li>
+                        <li><a href="#">Shipping & Returns</a></li>
+                        <li><a href="#">FAQs</a></li>
+                        <li><a href="#">Size Guide</a></li>
+                        <li><a href="#">Order Status</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-col newsletter-col">
+                    <h4>Newsletter</h4>
+                    <div class="newsletter-form">
+                        <div class="input-group">
+                            <input type="email" placeholder="Enter your email address" class="newsletter-input">
+                        </div>
+                        <button class="subscribe-btn">Subscribe</button>
+                    </div>
+                    <div class="social-icons">
+                        <a href="#"><i class="fa-brands fa-facebook-f"></i></a>
+                        <a href="#"><i class="fa-brands fa-twitter"></i></a>
+                        <a href="#"><i class="fa-brands fa-instagram"></i></a>
+                        <a href="#"><i class="fa-brands fa-pinterest"></i></a>
                     </div>
                 </div>
             </div>
-            <div style="text-align: center; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 20px;">
-                © 2026 Shop.co. All rights reserved.
+
+            <div class="footer-bottom">
+                <div class="copyright">
+                    &copy; 2026 Shop.co. All rights reserved.
+                </div>
+                <div class="legal-links">
+                    <a href="#">Terms & Conditions</a>
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Cookie Policy</a>
+                </div>
             </div>
         </div>
     </footer>
