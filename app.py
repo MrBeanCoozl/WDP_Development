@@ -17,12 +17,13 @@ import traceback
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# Google Auth Library
+# Google Auth Library Check
 try:
     from authlib.integrations.flask_client import OAuth
+    authlib_installed = True
 except ImportError:
-    print("Warning: Authlib not installed. Google Login will fail.")
-    OAuth = None
+    authlib_installed = False
+    print("Warning: Authlib not installed. Google Login will be disabled.")
 
 # ==============================================================================
 # SECTION 2: APP CONFIGURATION & SETUP
@@ -47,11 +48,11 @@ app.config['SMTP_SERVER'] = 'smtp.gmail.com'
 app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'.strip()
 app.config['SMTP_PASSWORD'] = 'xfxx kqbw mrsv wsvc'.strip()
 
-# --- GOOGLE OAUTH ---
+# --- GOOGLE OAUTH SETUP ---
 app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID') or 'YOUR_REAL_GOOGLE_CLIENT_ID'
 app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET') or 'YOUR_REAL_GOOGLE_CLIENT_SECRET'
 
-if OAuth:
+if authlib_installed:
     oauth = OAuth(app)
     google = oauth.register(
         name='google',
@@ -70,7 +71,7 @@ db = SQLAlchemy(app)
 MAX_LOGIN_ATTEMPTS = 5
 
 # ==============================================================================
-# SECTION 3: FILE HANDLING (Settings & JSON)
+# SECTION 3: FILE HANDLING & HELPERS
 # ==============================================================================
 SETTINGS_FILE = os.path.join(basedir, 'system_settings.json')
 TARGETS_FILE = os.path.join(basedir, 'sales_targets.json')
@@ -139,6 +140,86 @@ def smart_pagination_filter(pagination):
                 last_page = num
     return result
 
+def format_k(value):
+    try:
+        if value is None: return "0"
+        if value >= 1000000: return f"{value/1000000:.1f}M"
+        if value >= 1000: return f"{value/1000:.1f}k"
+        return str(value)
+    except: return "Err"
+
+def calculate_cart_totals(cart):
+    if not cart: return {'subtotal': 0, 'shipping': 0, 'gst': 0, 'grand_total': 0}
+    subtotal = sum(item['price'] * item['qty'] for item in cart.values())
+    shipping = 0 if subtotal >= 150 else 15.00
+    gst = (subtotal + shipping) * 0.09
+    grand_total = subtotal + shipping + gst
+    return {'subtotal': subtotal, 'shipping': shipping, 'gst': gst, 'grand_total': grand_total}
+
+def send_otp_email(user_email, otp_code):
+    sender_email = app.config.get('SMTP_EMAIL')
+    sender_password = app.config.get('SMTP_PASSWORD')
+    smtp_server = app.config.get('SMTP_SERVER')
+    
+    # DEV MODE CHECK
+    if not sender_email or not sender_password:
+        print(f"\n[DEV MODE - OTP] To: {user_email} | Code: {otp_code}\n")
+        return True
+        
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = user_email
+    msg['Subject'] = f"{otp_code} is your Shop.co code"
+    body = f"""
+    <div style="font-family: Arial; padding: 20px; border: 1px solid #eee;">
+        <h2>Verify your account</h2>
+        <p>Use the code below to complete your setup.</p>
+        <h1 style="letter-spacing: 5px; background: #f4f4f4; padding: 10px; display: inline-block;">{otp_code}</h1>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
+    try:
+        server = smtplib.SMTP(smtp_server, 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, user_email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Email Error: {e}")
+        return False
+
+def is_password_strong(password):
+    if len(password) < 8: return False, "Password must be at least 8 characters."
+    if not re.search(r"[A-Z]", password): return False, "Password must contain an uppercase letter."
+    if not re.search(r"\d", password): return False, "Password must contain a number."
+    return True, "Valid"
+
+@app.before_request
+def load_user():
+    g.user = None
+    if 'user_id' in session: 
+        try: g.user = User.query.get(session['user_id'])
+        except: session.clear() 
+
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not g.user or g.user.role == 'Customer':
+            flash("Access Denied.", "danger")
+            return redirect(url_for('store_home'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def operator_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not g.user or g.user.role == 'Customer':
+            flash("Access Denied.", "danger")
+            return redirect(url_for('store_home'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 # ==============================================================================
 # SECTION 4: DATABASE MODELS
 # ==============================================================================
@@ -163,6 +244,7 @@ class User(db.Model):
     otp_expiry = db.Column(db.DateTime)
     new_email_temp = db.Column(db.String(120)) 
     new_password_temp = db.Column(db.String(100)) 
+    is_verified = db.Column(db.Boolean, default=False)
     
     is_suspended = db.Column(db.Boolean, default=False)
     must_change_password = db.Column(db.Boolean, default=False)
@@ -237,117 +319,6 @@ class Product(db.Model):
     sizes = db.Column(db.String(200))
 
 # ==============================================================================
-# SECTION 5: HELPER FUNCTIONS
-# ==============================================================================
-def log_action(actor_type, actor_id, action, entity_type, entity_id, status, description):
-    try:
-        log = AuditLog(actor_type=actor_type, actor_id=actor_id, action=action, entity_type=entity_type, entity_id=entity_id, status=status, description=description)
-        db.session.add(log)
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        print(f"Logging Failed: {e}")
-
-def get_change(current, previous):
-    try:
-        if previous == 0: return 100 if current > 0 else 0
-        return ((current - previous) / previous) * 100
-    except: return 0
-
-def format_k(value):
-    try:
-        if value is None: return "0"
-        if value >= 1000000: return f"{value/1000000:.1f}M"
-        if value >= 1000: return f"{value/1000:.1f}k"
-        return str(value)
-    except: return "Err"
-
-def calculate_cart_totals(cart):
-    if not cart: return {'subtotal': 0, 'shipping': 0, 'gst': 0, 'grand_total': 0}
-    subtotal = sum(item['price'] * item['qty'] for item in cart.values())
-    shipping = 0 if subtotal >= 150 else 15.00
-    gst = (subtotal + shipping) * 0.09
-    grand_total = subtotal + shipping + gst
-    return {'subtotal': subtotal, 'shipping': shipping, 'gst': gst, 'grand_total': grand_total}
-
-def send_otp_email(user_email, otp_code):
-    sender_email = app.config.get('SMTP_EMAIL')
-    sender_password = app.config.get('SMTP_PASSWORD')
-    smtp_server = app.config.get('SMTP_SERVER')
-    if not sender_email or not sender_password:
-        print(f" [DEV MODE] OTP for {user_email}: {otp_code}")
-        return True
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = user_email
-    msg['Subject'] = f"{otp_code} is your verification code"
-    body = f"Your verification code is: {otp_code}"
-    msg.attach(MIMEText(body, 'plain'))
-    try:
-        server = smtplib.SMTP(smtp_server, 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, user_email, msg.as_string())
-        server.quit()
-        return True
-    except Exception as e:
-        print(f"Email Error: {e}")
-        return False
-
-def send_temp_password_email(user_email, temp_password):
-    sender_email = app.config.get('SMTP_EMAIL')
-    sender_password = app.config.get('SMTP_PASSWORD')
-    smtp_server = app.config.get('SMTP_SERVER')
-    if not sender_email or not sender_password: return False, "Missing credentials"
-    msg = MIMEMultipart()
-    msg['From'] = sender_email
-    msg['To'] = user_email
-    msg['Subject'] = "Security Notice: Temporary Password Reset"
-    body = f"Your temp password is: {temp_password}"
-    msg.attach(MIMEText(body, 'plain'))
-    try:
-        server = smtplib.SMTP(smtp_server, 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, user_email, msg.as_string())
-        server.quit()
-        return True, "Sent"
-    except Exception as e:
-        print(f"Admin Email Error: {e}")
-        return False, "Failed"
-
-def is_password_strong(password):
-    if len(password) < 8: return False, "Password must be at least 8 characters."
-    if not re.search(r"[A-Z]", password): return False, "Password must contain an uppercase letter."
-    if not re.search(r"\d", password): return False, "Password must contain a number."
-    return True, "Valid"
-
-@app.before_request
-def load_user():
-    g.user = None
-    if 'user_id' in session: 
-        try: g.user = User.query.get(session['user_id'])
-        except: session.clear() 
-
-def admin_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not g.user or g.user.role == 'Customer':
-            flash("Access Denied.", "danger")
-            return redirect(url_for('store_home'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-def operator_required(f):
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not g.user or g.user.role == 'Customer':
-            flash("Access Denied.", "danger")
-            return redirect(url_for('store_home'))
-        return f(*args, **kwargs)
-    return decorated_function
-
-# ==============================================================================
 # SECTION 6: ROUTES (STORE & AUTH)
 # ==============================================================================
 @app.context_processor
@@ -405,8 +376,12 @@ def store_auth():
         email = request.form.get('email').strip().lower()
         session['auth_email'] = email 
         user = User.query.filter_by(email=email).first()
-        if user: return redirect(url_for('store_login_password'))
-        else: return redirect(url_for('store_signup_details'))
+        
+        if user:
+            return redirect(url_for('store_login_password'))
+        else:
+            return redirect(url_for('store_signup_details'))
+            
     return render_template('store_auth.html')
 
 @app.route('/store/login/password', methods=['GET', 'POST'])
@@ -442,66 +417,121 @@ def store_signup_details():
         password = request.form.get('password')
         confirm = request.form.get('confirm_password')
         
+        # VALIDATION
         if password != confirm:
             flash("Passwords do not match.", "danger")
-            return render_template('store_signup.html', email=email)
+            return render_template('store_signup.html', email=email, form_data=request.form)
+            
         valid, msg = is_password_strong(password)
         if not valid:
             flash(f"Security Warning: {msg}", "danger")
-            return render_template('store_signup.html', email=email)
+            return render_template('store_signup.html', email=email, form_data=request.form)
             
+        # CHECK IF USER EXISTS AGAIN (Safety)
+        if User.query.filter_by(email=email).first():
+            flash("Account already exists. Please sign in.", "warning")
+            return redirect(url_for('store_login_password'))
+
         try:
             count = User.query.count() + 1
             custom_id = f"CUST-{datetime.now().year}-{count:03d}"
             otp = f"{random.randint(100000, 999999)}"
+            
             new_user = User(
                 custom_id=custom_id, username=email, email=email, password=password,
                 first_name=first_name, last_name=last_name, phone=phone, gender=gender,
                 role='Customer', auth_provider='local', otp=otp,
-                otp_expiry=datetime.utcnow() + timedelta(minutes=10)
+                otp_expiry=datetime.utcnow() + timedelta(minutes=10),
+                is_verified=False 
             )
             db.session.add(new_user)
             db.session.commit()
+            
             send_otp_email(email, otp)
+            print(f"\n[SIGNUP OTP] Code for {email}: {otp}\n")
+            session['pending_user_id'] = new_user.id 
             return redirect(url_for('store_verify'))
+            
         except Exception as e:
             db.session.rollback()
-            flash(f"Error: {str(e)}", "danger")
-    return render_template('store_signup.html', email=email)
+            flash(f"Error creating account: {str(e)}", "danger")
+            return render_template('store_signup.html', email=email, form_data=request.form)
+            
+    return render_template('store_signup.html', email=email, form_data={})
 
 @app.route('/store/verify', methods=['GET', 'POST'])
 def store_verify():
-    email = session.get('auth_email')
-    if not email: return redirect(url_for('store_auth'))
+    # Identify user: Check session first (from signup), else use login email
+    user = None
+    if 'pending_user_id' in session:
+        user = User.query.get(session['pending_user_id'])
+    elif session.get('auth_email'):
+        user = User.query.filter_by(email=session.get('auth_email')).first()
+        
+    if not user: return redirect(url_for('store_auth'))
     
     if request.method == 'POST':
         otp_input = request.form.get('otp')
-        user = User.query.filter_by(email=email).first()
-        if user and user.otp == otp_input and user.otp_expiry > datetime.utcnow():
+        
+        if user.otp == otp_input and user.otp_expiry > datetime.utcnow():
             user.otp = None
+            user.is_verified = True
             db.session.commit()
+            
             session['user_id'] = user.id
             session.pop('auth_email', None)
-            flash("Welcome! You are securely signed in.", "success")
-            return redirect(url_for('store_profile')) 
+            session.pop('pending_user_id', None)
+            
+            flash("Account verified! Welcome to Shop.co.", "success")
+            return redirect(url_for('store_home')) 
         else:
             flash("Invalid or expired code.", "danger")
-    return render_template('store_verify.html', email=email)
+            
+    return render_template('store_verify.html', email=user.email)
+
+@app.route('/store/resend')
+def store_resend():
+    user = None
+    if 'pending_user_id' in session:
+        user = User.query.get(session['pending_user_id'])
+    elif session.get('auth_email'):
+        user = User.query.filter_by(email=session.get('auth_email')).first()
+
+    if user:
+        otp = f"{random.randint(100000, 999999)}"
+        user.otp = otp
+        user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+        db.session.commit()
+        send_otp_email(user.email, otp)
+        print(f"\n[RESEND OTP] Code: {otp}\n")
+        flash("New code sent!", "success")
+    return redirect(url_for('store_verify'))
 
 @app.route('/auth/google')
 def google_login():
-    if not app.config.get('GOOGLE_CLIENT_ID') or 'YOUR_REAL' in app.config.get('GOOGLE_CLIENT_ID'):
-        flash("Google Login is not configured with real keys in app.py.", "danger")
+    if not authlib_installed:
+        flash("Google Login disabled (Lib missing).", "danger")
         return redirect(url_for('store_auth'))
+    if "YOUR_REAL" in app.config.get('GOOGLE_CLIENT_ID', 'YOUR_REAL'):
+        flash("Running in Google Login DEMO MODE (Real keys missing).", "info")
+        return redirect(url_for('google_callback', simulated='true'))
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri)
 
 @app.route('/auth/google/callback')
 def google_callback():
     try:
-        token = google.authorize_access_token()
-        user_info = google.parse_id_token(token)
-        email = user_info['email']
+        if request.args.get('simulated') == 'true':
+            email = "demo.google.user@gmail.com"
+            first_name = "Google"
+            last_name = "User"
+        else:
+            token = google.authorize_access_token()
+            user_info = google.parse_id_token(token)
+            email = user_info['email']
+            first_name = user_info.get('given_name', '')
+            last_name = user_info.get('family_name', '')
+
         user = User.query.filter_by(email=email).first()
         if not user:
             count = User.query.count() + 1
@@ -509,35 +539,22 @@ def google_callback():
             user = User(
                 custom_id=custom_id, username=email, email=email,
                 password="GOOGLE_OAUTH_USER", 
-                first_name=user_info.get('given_name', ''),
-                last_name=user_info.get('family_name', ''),
-                role='Customer', auth_provider='google'
+                first_name=first_name, last_name=last_name,
+                role='Customer', auth_provider='google',
+                is_verified=True
             )
             db.session.add(user)
             db.session.commit()
             session['user_id'] = user.id
             flash("Account created via Google. Please complete your profile.", "info")
             return redirect(url_for('store_profile'))
+        
         session['user_id'] = user.id
         flash("Successfully signed in with Google.", "success")
         return redirect(url_for('store_home'))
     except Exception as e:
         flash("Google Sign-In failed.", "danger")
         return redirect(url_for('store_auth'))
-
-@app.route('/store/resend')
-def store_resend():
-    email = session.get('auth_email')
-    if email:
-        otp = f"{random.randint(100000, 999999)}"
-        user = User.query.filter_by(email=email).first()
-        if user:
-            user.otp = otp
-            user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
-            db.session.commit()
-            send_otp_email(email, otp)
-            flash("New code sent!", "success")
-    return redirect(url_for('store_verify'))
 
 @app.route('/store/logout')
 def store_logout():
@@ -584,7 +601,6 @@ def update_profile():
 @app.route('/store/profile/security', methods=['POST'])
 def security_update():
     if not g.user: return redirect(url_for('store_auth'))
-    
     current_pw = request.form.get('current_password')
     new_pw = request.form.get('new_password')
     
@@ -604,13 +620,11 @@ def security_update():
                 session['show_password_verify'] = True
         else:
             flash("Incorrect current password.", "danger")
-    
     return redirect(url_for('store_profile'))
 
 @app.route('/store/profile/verify_security', methods=['POST'])
 def verify_security():
     if not g.user: return redirect(url_for('store_auth'))
-    
     otp_input = request.form.get('otp')
     if g.user.otp == otp_input and g.user.otp_expiry > datetime.utcnow():
         g.user.password = g.user.new_password_temp
@@ -622,7 +636,6 @@ def verify_security():
     else:
         flash("Invalid OTP.", "danger")
         session['show_password_verify'] = True
-        
     return redirect(url_for('store_profile'))
 
 @app.route('/store/profile/email_otp', methods=['POST'])
@@ -720,46 +733,33 @@ def store_checkout():
     if not g.user:
         flash("Please sign in to checkout.", "warning")
         return redirect(url_for('store_auth')) 
-        
     if not session.get('cart'): return redirect(url_for('store_shop'))
-    
     totals = calculate_cart_totals(session['cart'])
     if request.method == 'POST':
         try:
             name = request.form.get('name', f"{g.user.first_name} {g.user.last_name}")
             address = request.form['address']
-            
             client = Client.query.filter_by(email=g.user.email).first()
             if not client:
                 client = Client(name=name, email=g.user.email, company="Online Customer")
                 db.session.add(client)
                 db.session.commit()
-
             order_code = f"ORD-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
             new_order = Order(
-                order_code=order_code,
-                client_id=client.id,
+                order_code=order_code, client_id=client.id,
                 description=f"Online Order - Shipping to: {address}",
-                amount=totals['grand_total'],
-                status='Invoiced',
-                date_placed=datetime.utcnow()
+                amount=totals['grand_total'], status='Invoiced', date_placed=datetime.utcnow()
             )
             db.session.add(new_order)
             db.session.flush()
-
             for p_id, item in session['cart'].items():
                 order_item = OrderItem(order_id=new_order.id, item_name=item['name'], quantity=item['qty'], unit_price=item['price'], total_price=item['price']*item['qty'])
                 db.session.add(order_item)
-            
-            if totals['shipping'] > 0:
-                db.session.add(OrderItem(order_id=new_order.id, item_name="Shipping Fee", quantity=1, unit_price=totals['shipping'], total_price=totals['shipping']))
-            if totals['gst'] > 0:
-                db.session.add(OrderItem(order_id=new_order.id, item_name="GST (9%)", quantity=1, unit_price=totals['gst'], total_price=totals['gst']))
-
+            if totals['shipping'] > 0: db.session.add(OrderItem(order_id=new_order.id, item_name="Shipping Fee", quantity=1, unit_price=totals['shipping'], total_price=totals['shipping']))
+            if totals['gst'] > 0: db.session.add(OrderItem(order_id=new_order.id, item_name="GST (9%)", quantity=1, unit_price=totals['gst'], total_price=totals['gst']))
             inv_code = f"INV-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
             new_invoice = Invoice(invoice_code=inv_code, order_id=new_order.id, client_id=client.id, amount=totals['grand_total'], status='Paid', date_created=datetime.utcnow(), date_due=datetime.utcnow())
             db.session.add(new_invoice)
-            
             db.session.commit()
             session.pop('cart', None)
             log_action('Customer', g.user.username, 'Online Purchase', 'Order', order_code, 'Success', 'Web order placed')
@@ -769,7 +769,6 @@ def store_checkout():
             db.session.rollback()
             flash(f"Error: {str(e)}", "danger")
             return redirect(url_for('store_cart'))
-    
     return render_template('store_checkout.html', totals=totals, user=g.user)
 
 @app.route('/product/<int:product_id>')
@@ -799,45 +798,24 @@ def login():
 @app.route('/dashboard')
 def dashboard():
     if not g.user or g.user.role == 'Customer': return redirect(url_for('login'))
-    
-    # 1. Provide SAFE Defaults for ALL variables used in dashboard.html
     total_orders=0; total_sales="0"; products_sold=0; new_customers=0
     order_growth=0; sales_growth=0; product_growth=0; customer_growth=0
-    
     ytd_sales="0"; ytd_sales_growth="0"; ytd_pos=True
     ytd_count="0"; ytd_count_growth="0"; ytd_count_pos=True
     mtd_sales="0"; mtd_sales_diff="0"; mtd_pos=True
     mtd_count=0; mtd_count_diff=0; mtd_count_pos=True
-    
-    chart_invoice_months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     chart_invoice_reality = [0] * 12
-    chart_invoice_target = [20000] * 12
-    chart_orders_ytd_pct = [50, 50]
-    chart_orders_mtd_pct = [50, 50]
-    top_clients_progress = []
-    chart_vol_service_labels = []
-    chart_vol_data = []
-    chart_service_data = []
-    chart_sat_labels = ['W1','W2','W3','W4','W5','W6','W7']
-    chart_sat_data = [80, 85, 82, 88, 90, 87, 92]
-
-    # 2. Try to calculate real values
+    chart_invoice_target = get_sales_targets()
+    chart_orders_ytd_pct = [50, 50]; chart_orders_mtd_pct = [50, 50]
+    top_clients_progress = []; chart_vol_service_labels = []; chart_vol_data = []; chart_service_data = []
+    chart_sat_labels = []; chart_sat_data = []
     try:
         total_orders = Order.query.count()
         total_sales = db.session.query(func.sum(Invoice.amount)).scalar() or 0
         products_sold = Invoice.query.filter_by(status='Paid').count()
         new_customers = Client.query.count()
-        chart_invoice_target = get_sales_targets()
-        
-        # Calculate YTD/MTD if data exists (Simplified for stability)
-        now = datetime.now()
-        current_year = now.year
-        ytd_amt = db.session.query(func.sum(Invoice.amount)).filter(extract('year', Invoice.date_created) == current_year).scalar() or 0
-        ytd_sales = format_k(ytd_amt)
-    except Exception as e:
-        print(f"Dashboard Calc Error: {e}")
-
-    # 3. Pass EVERYTHING to template
+    except Exception: pass
+    
     return render_template('dashboard.html',
         total_orders=format_k(total_orders), order_growth=order_growth,
         total_sales=format_k(total_sales), sales_growth=sales_growth,
@@ -847,7 +825,8 @@ def dashboard():
         ytd_count=ytd_count, ytd_count_growth=ytd_count_growth, ytd_count_pos=ytd_count_pos,
         mtd_sales=mtd_sales, mtd_sales_diff=mtd_sales_diff, mtd_pos=mtd_pos,
         mtd_count=mtd_count, mtd_count_diff=mtd_count_diff, mtd_count_pos=mtd_count_pos,
-        chart_invoice_months=chart_invoice_months, chart_invoice_reality=chart_invoice_reality, chart_invoice_target=chart_invoice_target,
+        chart_invoice_months=['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        chart_invoice_reality=chart_invoice_reality, chart_invoice_target=chart_invoice_target,
         chart_orders_ytd_pct=chart_orders_ytd_pct, chart_orders_mtd_pct=chart_orders_mtd_pct,
         top_clients_progress=top_clients_progress,
         chart_vol_service_labels=chart_vol_service_labels, chart_vol_data=chart_vol_data, chart_service_data=chart_service_data,
@@ -1027,6 +1006,8 @@ if __name__ == '__main__':
                 try: conn.execute(text("ALTER TABLE user ADD COLUMN new_email_temp VARCHAR(120)"))
                 except: pass
                 try: conn.execute(text("ALTER TABLE user ADD COLUMN new_password_temp VARCHAR(100)"))
+                except: pass
+                try: conn.execute(text("ALTER TABLE user ADD COLUMN is_verified BOOLEAN"))
                 except: pass
                 try: 
                     conn.execute(text("""

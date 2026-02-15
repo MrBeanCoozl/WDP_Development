@@ -3,9 +3,16 @@
 <style>
     .auth-wrapper { min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
     .auth-card { width: 100%; max-width: 400px; text-align: center; }
-    .otp-input { width: 100%; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; border: 1px solid #e5e5e5; border-radius: 8px; margin: 20px 0; outline: none; font-weight: 700; }
+    .otp-input { 
+        width: 100%; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; 
+        border: 1px solid #e5e5e5; border-radius: 8px; margin: 20px 0; outline: none; font-weight: 700;
+    }
     .otp-input:focus { border-color: black; }
     .btn-auth { width: 100%; background: black; color: white; padding: 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; }
+    
+    .resend-container { margin-top: 30px; font-size: 13px; color: #999; }
+    .resend-link { color: black; text-decoration: underline; font-weight: 600; cursor: pointer; }
+    .resend-link.disabled { color: #ccc; cursor: default; pointer-events: none; text-decoration: none; }
 </style>
 
 <div class="auth-wrapper">
@@ -13,14 +20,34 @@
         <i class="fa-regular fa-envelope" style="font-size: 40px; margin-bottom: 20px;"></i>
         <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">Check your email</h2>
         <p style="color: #666; font-size: 14px;">We sent a 6-digit code to<br><strong>{{ email }}</strong></p>
+
         <form method="POST">
             <input type="text" name="otp" class="otp-input" placeholder="123456" maxlength="6" required autofocus autocomplete="off">
             <button type="submit" class="btn-auth">Verify & Login</button>
         </form>
-        <div style="margin-top: 30px; font-size: 13px;">
-            <p style="color: #999;">Didn't receive code?</p>
-            <a href="{{ url_for('store_resend') }}" style="color: black; text-decoration: underline; font-weight: 600;">Resend Email</a>
+
+        <div class="resend-container">
+            <p>Didn't receive code?</p>
+            <a href="{{ url_for('store_resend') }}" id="resendBtn" class="resend-link disabled">Resend Email</a>
+            <span id="timer"> (60s)</span>
         </div>
     </div>
 </div>
+
+<script>
+    let timeLeft = 60;
+    const resendBtn = document.getElementById('resendBtn');
+    const timerSpan = document.getElementById('timer');
+
+    const interval = setInterval(() => {
+        timeLeft--;
+        timerSpan.textContent = ` (${timeLeft}s)`;
+        
+        if (timeLeft <= 0) {
+            clearInterval(interval);
+            timerSpan.style.display = 'none';
+            resendBtn.classList.remove('disabled');
+        }
+    }, 1000);
+</script>
 {% endblock %}
