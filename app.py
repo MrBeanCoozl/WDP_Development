@@ -161,7 +161,6 @@ def send_otp_email(user_email, otp_code):
     sender_password = app.config.get('SMTP_PASSWORD')
     smtp_server = app.config.get('SMTP_SERVER')
     
-    # DEV MODE CHECK
     if not sender_email or not sender_password:
         print(f"\n[DEV MODE - OTP] To: {user_email} | Code: {otp_code}\n")
         return True
@@ -188,6 +187,27 @@ def send_otp_email(user_email, otp_code):
     except Exception as e:
         print(f"Email Error: {e}")
         return False
+
+def send_temp_password_email(user_email, temp_password):
+    sender_email = app.config.get('SMTP_EMAIL')
+    sender_password = app.config.get('SMTP_PASSWORD')
+    smtp_server = app.config.get('SMTP_SERVER')
+    if not sender_email or not sender_password: return False, "Missing credentials"
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = user_email
+    msg['Subject'] = "Security Notice: Temporary Password Reset"
+    body = f"Your temp password is: {temp_password}"
+    msg.attach(MIMEText(body, 'plain'))
+    try:
+        server = smtplib.SMTP(smtp_server, 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, user_email, msg.as_string())
+        server.quit()
+        return True, "Sent"
+    except Exception as e:
+        return False, "Failed"
 
 def is_password_strong(password):
     if len(password) < 8: return False, "Password must be at least 8 characters."
@@ -319,6 +339,20 @@ class Product(db.Model):
     sizes = db.Column(db.String(200))
 
 # ==============================================================================
+# SECTION 5: HELPER FUNCTIONS (Log Added)
+# ==============================================================================
+def log_action(actor_type, actor_id, action, entity_type, entity_id, status, description):
+    try:
+        log = AuditLog(actor_type=actor_type, actor_id=actor_id, action=action, entity_type=entity_type, entity_id=entity_id, status=status, description=description)
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Logging Failed: {e}")
+
+# ... (Previous helper functions remain the same) ...
+
+# ==============================================================================
 # SECTION 6: ROUTES (STORE & AUTH)
 # ==============================================================================
 @app.context_processor
@@ -392,16 +426,30 @@ def store_login_password():
     if request.method == 'POST':
         password = request.form.get('password')
         user = User.query.filter_by(email=email).first()
+        
         if user and user.password == password:
             if user.role != 'Customer':
                 flash("This interface is for Customers only.", "danger")
                 return redirect(url_for('store_auth'))
-            session['user_id'] = user.id
-            flash("Welcome back!", "success")
-            if request.args.get('next') == 'checkout': return redirect(url_for('store_checkout'))
-            return redirect(url_for('store_home'))
+            
+            # --- 2FA LOGIN FLOW START ---
+            otp = f"{random.randint(100000, 999999)}"
+            user.otp = otp
+            user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+            db.session.commit()
+            
+            send_otp_email(email, otp)
+            print(f"\n[LOGIN 2FA OTP] Code for {email}: {otp}\n")
+            
+            # We don't log them in yet. We send them to Verify.
+            # verify page uses session['auth_email'] to find the user.
+            session['auth_email'] = user.email 
+            return redirect(url_for('store_verify'))
+            # --- 2FA LOGIN FLOW END ---
+            
         else:
             flash("Invalid password.", "danger")
+            
     return render_template('store_login.html', email=email)
 
 @app.route('/store/signup', methods=['GET', 'POST'])
@@ -417,7 +465,6 @@ def store_signup_details():
         password = request.form.get('password')
         confirm = request.form.get('confirm_password')
         
-        # VALIDATION
         if password != confirm:
             flash("Passwords do not match.", "danger")
             return render_template('store_signup.html', email=email, form_data=request.form)
@@ -427,7 +474,6 @@ def store_signup_details():
             flash(f"Security Warning: {msg}", "danger")
             return render_template('store_signup.html', email=email, form_data=request.form)
             
-        # CHECK IF USER EXISTS AGAIN (Safety)
         if User.query.filter_by(email=email).first():
             flash("Account already exists. Please sign in.", "warning")
             return redirect(url_for('store_login_password'))
@@ -435,6 +481,7 @@ def store_signup_details():
         try:
             count = User.query.count() + 1
             custom_id = f"CUST-{datetime.now().year}-{count:03d}"
+            
             otp = f"{random.randint(100000, 999999)}"
             
             new_user = User(
@@ -461,12 +508,14 @@ def store_signup_details():
 
 @app.route('/store/verify', methods=['GET', 'POST'])
 def store_verify():
-    # Identify user: Check session first (from signup), else use login email
+    email = session.get('auth_email')
     user = None
+    
     if 'pending_user_id' in session:
         user = User.query.get(session['pending_user_id'])
-    elif session.get('auth_email'):
-        user = User.query.filter_by(email=session.get('auth_email')).first()
+        email = user.email if user else email
+    elif email:
+        user = User.query.filter_by(email=email).first()
         
     if not user: return redirect(url_for('store_auth'))
     
@@ -482,12 +531,12 @@ def store_verify():
             session.pop('auth_email', None)
             session.pop('pending_user_id', None)
             
-            flash("Account verified! Welcome to Shop.co.", "success")
+            flash("Welcome to Shop.co.", "success")
             return redirect(url_for('store_home')) 
         else:
             flash("Invalid or expired code.", "danger")
             
-    return render_template('store_verify.html', email=user.email)
+    return render_template('store_verify.html', email=email)
 
 @app.route('/store/resend')
 def store_resend():
@@ -507,13 +556,13 @@ def store_resend():
         flash("New code sent!", "success")
     return redirect(url_for('store_verify'))
 
+# --- SOCIAL AUTH ---
 @app.route('/auth/google')
 def google_login():
     if not authlib_installed:
-        flash("Google Login disabled (Lib missing).", "danger")
+        flash("Google Login disabled.", "danger")
         return redirect(url_for('store_auth'))
     if "YOUR_REAL" in app.config.get('GOOGLE_CLIENT_ID', 'YOUR_REAL'):
-        flash("Running in Google Login DEMO MODE (Real keys missing).", "info")
         return redirect(url_for('google_callback', simulated='true'))
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri)
@@ -538,16 +587,14 @@ def google_callback():
             custom_id = f"CUST-{datetime.now().year}-{count:03d}"
             user = User(
                 custom_id=custom_id, username=email, email=email,
-                password="GOOGLE_OAUTH_USER", 
-                first_name=first_name, last_name=last_name,
-                role='Customer', auth_provider='google',
-                is_verified=True
+                password="GOOGLE_OAUTH_USER", first_name=first_name, last_name=last_name,
+                role='Customer', auth_provider='google', is_verified=True
             )
             db.session.add(user)
             db.session.commit()
             session['user_id'] = user.id
-            flash("Account created via Google. Please complete your profile.", "info")
-            return redirect(url_for('store_profile'))
+            flash("Account created via Google.", "info")
+            return redirect(url_for('store_home'))
         
         session['user_id'] = user.id
         flash("Successfully signed in with Google.", "success")
@@ -567,33 +614,28 @@ def store_logout():
 @app.route('/store/profile')
 def store_profile():
     if not g.user: return redirect(url_for('store_auth'))
-    
     client = Client.query.filter_by(email=g.user.email).first()
     orders = []
     invoices = []
     if client:
         orders = Order.query.filter_by(client_id=client.id).order_by(Order.date_placed.desc()).all()
         invoices = Invoice.query.filter_by(client_id=client.id).order_by(Invoice.date_created.desc()).all()
-    
     payment_methods = g.user.payment_methods
     return render_template('store_profile.html', user=g.user, orders=orders, invoices=invoices, payment_methods=payment_methods)
 
 @app.route('/store/profile/update', methods=['POST'])
 def update_profile():
     if not g.user: return redirect(url_for('store_auth'))
-    
     g.user.first_name = request.form.get('first_name')
     g.user.last_name = request.form.get('last_name')
     g.user.phone = request.form.get('phone')
     g.user.gender = request.form.get('gender')
-    
     if 'profile_image' in request.files:
         file = request.files['profile_image']
         if file and file.filename != '' and allowed_file(file.filename):
             filename = secure_filename(f"user_{g.user.id}_{file.filename}")
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             g.user.profile_image = filename
-    
     db.session.commit()
     flash("Profile updated successfully.", "success")
     return redirect(url_for('store_profile'))
@@ -603,7 +645,6 @@ def security_update():
     if not g.user: return redirect(url_for('store_auth'))
     current_pw = request.form.get('current_password')
     new_pw = request.form.get('new_password')
-    
     if current_pw and new_pw:
         if g.user.password == current_pw:
             valid, msg = is_password_strong(new_pw)
@@ -615,7 +656,7 @@ def security_update():
                 g.user.otp = otp
                 g.user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
                 db.session.commit()
-                print(f"\n[SECURITY OTP] Code: {otp} for Password Change.\n")
+                print(f"\n[SECURITY OTP] Code: {otp}\n")
                 flash(f"Verification code sent. Code: {otp} (Check Console)", "info")
                 session['show_password_verify'] = True
         else:
@@ -651,7 +692,7 @@ def request_email_change():
             g.user.otp = otp
             g.user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
             db.session.commit()
-            print(f"\n[OTP SENT] Code: {otp} for email change.\n")
+            print(f"\n[OTP SENT] Code: {otp}\n")
             flash(f"OTP sent for verification. Code: {otp} (Check Console)", "info")
             session['show_email_verify'] = True
     return redirect(url_for('store_profile'))
@@ -706,7 +747,6 @@ def store_cart():
             session.modified = True
             flash(f'Added {product.name} to cart!', 'success')
         return redirect(url_for('store_cart'))
-    
     totals = calculate_cart_totals(session['cart'])
     cart_items = []
     for p_id, item in session['cart'].items():
@@ -777,7 +817,7 @@ def store_product(product_id):
     return render_template('store_product.html', product=product)
 
 # ==============================================================================
-# SECTION 7: ADMIN PANEL ROUTES (PRESERVED)
+# SECTION 7: ADMIN PANEL ROUTES (PRESERVED & FIXED LOGGING)
 # ==============================================================================
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -790,7 +830,10 @@ def login():
             if user.role == 'Customer':
                 flash("Access Denied: Customers must use the Store Login.", "danger")
                 return redirect(url_for('store_auth'))
+            
             session['user_id'] = user.id
+            # FIXED: Added Log Action
+            log_action('Admin', user.username, 'Login', 'Auth', 'N/A', 'Success', 'Admin Panel Login')
             return redirect(url_for('dashboard'))
         flash("Invalid Admin Credentials", "danger")
     return render_template('login.html')
