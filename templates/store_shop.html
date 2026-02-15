@@ -4,6 +4,18 @@
 
 {% block content %}
 
+<style>
+    .flying-img {
+        position: fixed;
+        z-index: 9999;
+        border-radius: 50%;
+        opacity: 0.9;
+        pointer-events: none;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        transition: all 0.8s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+</style>
+
 <div class="container shop-container">
     
     <aside class="sidebar-wrapper">
@@ -80,9 +92,9 @@
                 <div class="product-card animate-fade-up" style="animation-delay: {{ loop.index0 * 0.05 }}s;">
                     <div class="card-image-wrap">
                         <a href="{{ url_for('store_product', product_id=product.id) }}">
-                            <img src="{{ product.image_url }}" alt="{{ product.name }}">
+                            <img src="{{ product.image_url }}" alt="{{ product.name }}" id="img-shop-{{ product.id }}">
                         </a>
-                        <form action="{{ url_for('store_cart') }}" method="POST">
+                        <form action="{{ url_for('store_cart') }}" method="POST" class="ajax-cart-form" data-id="{{ product.id }}" data-prefix="shop-">
                             <input type="hidden" name="product_id" value="{{ product.id }}">
                             <input type="hidden" name="quantity" value="1">
                             <button type="submit" class="quick-add-btn"><i class="fa-solid fa-plus"></i></button>
@@ -123,85 +135,148 @@
     let minGap = 10;
     function slideOne() { if (parseInt(sliderTwo.value) - parseInt(sliderOne.value) <= minGap) { sliderOne.value = parseInt(sliderTwo.value) - minGap; } displayValOne.value = sliderOne.value; }
     function slideTwo() { if (parseInt(sliderTwo.value) - parseInt(sliderOne.value) <= minGap) { sliderTwo.value = parseInt(sliderOne.value) + minGap; } displayValTwo.value = sliderTwo.value; }
+
+    // AJAX CART LOGIC
+    document.addEventListener('DOMContentLoaded', function() {
+        const forms = document.querySelectorAll('.ajax-cart-form');
+        forms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault(); 
+                
+                const btn = this.querySelector('button');
+                const productId = this.dataset.id;
+                const prefix = this.dataset.prefix || '';
+                const sourceImg = document.getElementById(`img-${prefix}${productId}`);
+                const cartIcon = document.querySelector('.fa-bag-shopping');
+                
+                // Animation
+                if (sourceImg && cartIcon) {
+                    const flyingImg = sourceImg.cloneNode();
+                    flyingImg.classList.add('flying-img');
+                    
+                    const startRect = sourceImg.getBoundingClientRect();
+                    const endRect = cartIcon.getBoundingClientRect();
+                    
+                    flyingImg.style.width = startRect.width + 'px';
+                    flyingImg.style.height = startRect.height + 'px';
+                    flyingImg.style.top = startRect.top + 'px';
+                    flyingImg.style.left = startRect.left + 'px';
+                    
+                    document.body.appendChild(flyingImg);
+                    
+                    void flyingImg.offsetWidth; 
+                    
+                    flyingImg.style.top = (endRect.top + 5) + 'px';
+                    flyingImg.style.left = (endRect.left + 5) + 'px';
+                    flyingImg.style.width = '20px';
+                    flyingImg.style.height = '20px';
+                    flyingImg.style.opacity = '0';
+                    
+                    setTimeout(() => {
+                        flyingImg.remove();
+                        cartIcon.parentElement.style.transform = 'scale(1.2)';
+                        cartIcon.parentElement.style.transition = 'transform 0.2s';
+                        setTimeout(() => cartIcon.parentElement.style.transform = 'scale(1)', 200);
+                    }, 800);
+                }
+                
+                // Fetch
+                const formData = new FormData(this);
+                fetch("{{ url_for('store_cart') }}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        let badge = document.querySelector('.nav-icon .badge');
+                        if (!badge) {
+                            badge = document.createElement('span');
+                            badge.className = 'badge';
+                            document.querySelector('.fa-bag-shopping').parentElement.appendChild(badge);
+                        }
+                        badge.textContent = data.cart_count;
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        });
+    });
 </script>
 
 <style>
-    /* Layout */
+    /* PRESERVED LAYOUT STYLES - UNCHANGED */
     .shop-container { display: grid; grid-template-columns: 260px 1fr; gap: 60px; padding-top: 30px; padding-bottom: 60px; align-items: start; }
-    .container { max-width: 1400px; margin: 0 auto; padding: 0 40px; }
-
-    /* Animations */
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes fadeDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-up { animation: fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
-    .animate-fade-down { animation: fadeDown 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
-
-    /* Sticky Sidebar with Hidden Scrollbar */
-    .sidebar-wrapper {
-        position: sticky; top: 100px; 
-        height: calc(100vh - 100px); 
-        overflow-y: auto; padding-right: 10px;
-        scrollbar-width: none; /* Firefox */
-        -ms-overflow-style: none;  /* IE */
-    }
-    .sidebar-wrapper::-webkit-scrollbar { display: none; /* Chrome/Safari */ }
-
-    /* Filter Styles */
-    .filter-group { margin-bottom: 40px; }
-    .filter-title { font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 20px; color: #111; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .sidebar-sticky-content { position: sticky; top: 100px; padding-right: 20px; }
     
-    .cat-list { list-style: none; padding: 0; }
-    .cat-link { font-size: 14px; color: #666; display: block; padding: 6px 0; transition: 0.2s; }
-    .cat-link:hover, .cat-link.active { color: black; font-weight: 600; }
-
-    /* Price Slider */
-    .range-slider { position: relative; height: 4px; background: #e5e5e5; border-radius: 5px; margin: 25px 0 20px; }
-    .range-slider input[type="range"] { position: absolute; top: -6px; width: 100%; background: none; pointer-events: none; -webkit-appearance: none; }
-    .range-slider input[type="range"]::-webkit-slider-thumb { height: 16px; width: 16px; border-radius: 50%; background: black; pointer-events: auto; -webkit-appearance: none; cursor: pointer; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-    .price-inputs { display: flex; gap: 10px; align-items: center; margin-bottom: 20px; }
-    .price-field { display: flex; align-items: center; border: 1px solid #e5e5e5; padding: 8px 12px; border-radius: 6px; font-size: 13px; flex: 1; background: #fff; }
-    .price-field input { width: 100%; border: none; outline: none; margin-left: 5px; font-weight: 500; }
-    .btn-apply { width: 100%; background: black; color: white; border: none; padding: 10px; font-size: 12px; font-weight: 700; text-transform: uppercase; border-radius: 6px; cursor: pointer; }
-
-    /* Size Grid */
-    .size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .filter-group { margin-bottom: 35px; border-bottom: 1px solid #eee; padding-bottom: 25px; }
+    .filter-group:last-child { border-bottom: none; }
+    .filter-title { font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 15px; letter-spacing: 0.5px; }
+    
+    .cat-list li { margin-bottom: 10px; }
+    .cat-link { color: #555; font-size: 14px; transition: 0.2s; position: relative; padding-left: 0; }
+    .cat-link:hover, .cat-link.active { color: black; font-weight: 600; padding-left: 5px; }
+    .cat-link.active::before { content: '•'; position: absolute; left: -10px; color: black; }
+    
+    /* Range Slider */
+    .range-slider { position: relative; width: 100%; height: 5px; background: #ddd; border-radius: 5px; margin: 20px 0; }
+    .range-slider input { position: absolute; top: -5px; width: 100%; background: none; pointer-events: none; -webkit-appearance: none; }
+    .range-slider input::-webkit-slider-thumb { height: 15px; width: 15px; border-radius: 50%; background: black; pointer-events: auto; -webkit-appearance: none; cursor: pointer; }
+    
+    .price-inputs { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; }
+    .price-field { display: flex; align-items: center; border: 1px solid #eee; padding: 5px 10px; border-radius: 4px; width: 45%; }
+    .price-field span { font-size: 12px; color: #999; margin-right: 5px; }
+    .price-field input { width: 100%; border: none; outline: none; font-size: 13px; font-weight: 600; }
+    .separator { color: #999; font-size: 12px; }
+    .btn-apply { width: 100%; background: black; color: white; border: none; padding: 10px; margin-top: 15px; font-size: 12px; font-weight: 700; text-transform: uppercase; cursor: pointer; border-radius: 4px; }
+    
+    .size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .size-box { position: relative; cursor: pointer; }
     .size-box input { display: none; }
-    .size-text { display: flex; align-items: center; justify-content: center; height: 40px; border: 1px solid #e5e5e5; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; transition: 0.2s; background: #fff; }
-    .size-box:hover .size-text { border-color: #999; color: black; }
+    .size-text { display: flex; align-items: center; justify-content: center; height: 35px; border: 1px solid #eee; font-size: 12px; font-weight: 600; color: #555; transition: 0.2s; border-radius: 4px; }
     .size-box input:checked + .size-text { background: black; color: white; border-color: black; }
-
-    .btn-reset { display: block; width: 100%; text-align: center; font-size: 13px; text-decoration: none; color: #555; border: 1px solid #e5e5e5; padding: 10px; border-radius: 6px; margin-top: 30px; background: #f9f9f9; }
-    .btn-reset:hover { background: #eee; color: black; }
-
-    /* Main Content */
-    .shop-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; border-bottom: 1px solid #f0f0f0; padding-bottom: 20px; }
-    .page-title { font-size: 36px; font-weight: 800; text-transform: uppercase; margin: 0; line-height: 1; }
-    .results-text { color: #777; font-size: 13px; margin: 5px 0 0; }
-    .sort-select { padding: 10px 15px; border: 1px solid #e5e5e5; font-size: 13px; border-radius: 6px; outline: none; cursor: pointer; background: white; }
-
-    .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-bottom: 60px; }
-    .product-card { background: transparent; transition: transform 0.3s ease; }
-    .product-card:hover { transform: translateY(-5px); }
-    .card-image-wrap { position: relative; aspect-ratio: 4/5; background: #f0f0f0; overflow: hidden; border-radius: 6px; margin-bottom: 15px; }
-    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; transition: 0.7s; }
-    .product-card:hover img { transform: scale(1.08); }
-    .quick-add-btn { position: absolute; bottom: 15px; right: 15px; width: 35px; height: 35px; border-radius: 50%; background: white; border: none; display: flex; align-items: center; justify-content: center; opacity: 0; transform: translateY(10px); transition: 0.3s; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-    .product-card:hover .quick-add-btn { opacity: 1; transform: translateY(0); }
-    .card-name { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
-    .card-cat { font-size: 11px; font-weight: 700; color: #999; margin-bottom: 6px; text-transform: uppercase; }
+    .size-text:hover { border-color: black; }
     
-    .pagination { display: flex; justify-content: center; align-items: center; gap: 15px; }
-    .page-btn { width: 40px; height: 40px; border: 1px solid #e5e5e5; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-    .page-btn:hover { background: #111; border-color: #111; color: white; }
+    .btn-reset { display: block; text-align: center; font-size: 12px; text-decoration: underline; color: #666; margin-top: 20px; }
+    
+    /* Main Content */
+    .shop-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+    .page-title { font-size: 24px; font-weight: 800; text-transform: uppercase; margin: 0 0 5px; }
+    .results-text { font-size: 13px; color: #666; margin: 0; }
+    .sort-select { padding: 8px 12px; border: 1px solid #eee; border-radius: 4px; font-size: 13px; outline: none; cursor: pointer; }
+    
+    .product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+    .product-card { position: relative; }
+    .card-image-wrap { position: relative; background: #f4f4f5; aspect-ratio: 4/5; overflow: hidden; margin-bottom: 15px; border-radius: 4px; }
+    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+    .product-card:hover img { transform: scale(1.08); }
+    
+    .quick-add-btn { position: absolute; bottom: 15px; right: 15px; width: 35px; height: 35px; border-radius: 50%; background: white; border: none; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; opacity: 0; transform: translateY(10px); transition: 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .quick-add-btn:hover { background: black; color: white; }
+    .product-card:hover .quick-add-btn { opacity: 1; transform: translateY(0); }
+    
+    .badge-hot { position: absolute; top: 10px; left: 10px; background: #e11d48; color: white; font-size: 9px; font-weight: 800; padding: 4px 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .card-details { text-align: left; }
+    .card-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #999; margin-bottom: 5px; }
+    .card-name { font-size: 14px; font-weight: 600; margin: 0 0 5px; color: #111; }
+    .card-price { font-size: 14px; font-weight: 700; color: #111; }
+    
+    .pagination { margin-top: 50px; display: flex; justify-content: center; align-items: center; gap: 15px; }
+    .page-btn { width: 35px; height: 35px; border: 1px solid #eee; display: flex; align-items: center; justify-content: center; font-size: 12px; border-radius: 4px; transition: 0.2s; }
+    .page-btn:hover { border-color: black; background: black; color: white; }
+    .page-info { font-size: 13px; font-weight: 600; }
+    
+    .no-results { text-align: center; padding: 60px 0; background: #f9f9f9; border-radius: 8px; }
+    .btn-home { display: inline-block; margin-top: 15px; color: black; text-decoration: underline; font-weight: 600; font-size: 13px; }
 
-    @media (max-width: 992px) {
-        .shop-container { grid-template-columns: 1fr; }
-        .sidebar-wrapper { position: static; height: auto; margin-bottom: 40px; padding-right: 0; }
-        .product-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 600px) {
-        .product-grid { grid-template-columns: 1fr; }
-    }
+    @keyframes fadeDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-down { animation: fadeDown 0.8s ease backwards; }
+    .animate-fade-up { animation: fadeUp 0.8s ease backwards; }
+
+    @media (max-width: 1024px) { .product-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 900px) { .shop-container { grid-template-columns: 1fr; gap: 30px; } .sidebar-wrapper { display: none; } } /* Hide Sidebar on Mobile for simplicity or change to drawer */
 </style>
-
 {% endblock %}

@@ -1,36 +1,59 @@
 {% extends "store_base.html" %}
 {% block content %}
 <style>
-    .auth-wrapper { min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+    .auth-wrapper { min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
     .auth-card { width: 100%; max-width: 400px; text-align: center; }
+    
     .otp-input { 
         width: 100%; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; 
         border: 1px solid #e5e5e5; border-radius: 8px; margin: 20px 0; outline: none; font-weight: 700;
     }
     .otp-input:focus { border-color: black; }
-    .btn-auth { width: 100%; background: black; color: white; padding: 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; }
     
-    .resend-container { margin-top: 30px; font-size: 13px; color: #999; }
+    .btn-auth { width: 100%; background: black; color: white; padding: 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; transition: 0.2s; }
+    .btn-auth:hover { opacity: 0.9; }
+    
+    .resend-container { margin-top: 20px; font-size: 13px; color: #999; margin-bottom: 30px;}
     .resend-link { color: black; text-decoration: underline; font-weight: 600; cursor: pointer; }
     .resend-link.disabled { color: #ccc; cursor: default; pointer-events: none; text-decoration: none; }
+
+    /* Password Section Styles */
+    .divider { position: relative; margin: 30px 0; border-top: 1px solid #eee; }
+    .divider span { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: white; padding: 0 10px; color: #999; font-size: 12px; font-weight: 600; }
+    
+    .password-form { margin-top: 20px; text-align: left; }
+    .form-input { width: 100%; padding: 14px; border: 1px solid #e5e5e5; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; box-sizing: border-box; margin-bottom: 10px; }
+    .form-input:focus { border-color: black; }
+    .btn-secondary { background: white; color: black; border: 1px solid #e5e5e5; }
+    .btn-secondary:hover { background: #f9f9f9; border-color: #ccc; }
 </style>
 
 <div class="auth-wrapper">
     <div class="auth-card">
-        <i class="fa-solid fa-shield-halved" style="font-size: 40px; margin-bottom: 20px;"></i>
-        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">Verify Account</h2>
-        <p style="color: #666; font-size: 14px;">Enter the 6-digit security code sent to<br><strong>{{ email }}</strong></p>
+        <i class="fa-regular fa-envelope" style="font-size: 40px; margin-bottom: 20px;"></i>
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">Verify Login</h2>
+        <p style="color: #666; font-size: 14px;">Enter the 6-digit code sent to<br><strong>{{ email }}</strong></p>
 
         <form method="POST">
             <input type="text" name="otp" class="otp-input" placeholder="000000" maxlength="6" required autofocus autocomplete="off">
-            <button type="submit" class="btn-auth">VERIFY & CONTINUE</button>
+            <button type="submit" class="btn-auth">VERIFY CODE</button>
         </form>
 
         <div class="resend-container">
-            <p>Didn't receive code?</p>
-            <a href="{{ url_for('store_resend') }}" id="resendBtn" class="resend-link disabled">Resend Code</a>
+            <span style="margin-right: 5px;">Didn't receive code?</span>
+            <a href="{{ url_for('store_resend') }}" id="resendBtn" class="resend-link disabled">Resend</a>
             <span id="timer"> (60s)</span>
         </div>
+
+        {% if not is_new_signup %}
+        <div class="divider"><span>OR</span></div>
+        
+        <form method="POST" class="password-form">
+            <div style="text-align: center; margin-bottom: 15px; font-size: 14px; font-weight: 600;">Use Password</div>
+            <input type="password" name="password" class="form-input" placeholder="Enter your password" required>
+            <button type="submit" class="btn-auth btn-secondary">LOGIN WITH PASSWORD</button>
+        </form>
+        {% endif %}
     </div>
 </div>
 

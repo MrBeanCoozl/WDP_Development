@@ -280,6 +280,7 @@ class User(db.Model):
 class PaymentMethod(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    cardholder_name = db.Column(db.String(100)) # Added this field
     card_type = db.Column(db.String(20)) 
     last4 = db.Column(db.String(4))
     expiry = db.Column(db.String(7))
@@ -478,6 +479,8 @@ def store_shop():
 
 # --- AUTHENTICATION FLOW ---
 
+# --- AUTH FLOW UPDATES ---
+
 @app.route('/store/auth', methods=['GET', 'POST'])
 def store_auth():
     if g.user: return redirect(url_for('store_home'))
@@ -488,14 +491,11 @@ def store_auth():
         user = User.query.filter_by(email=email).first()
         
         if user:
-            # SEPARATION CHECK:
-            # If the user exists but is NOT a customer (e.g., they are Staff/Admin),
-            # deny access to the store login and redirect to admin login.
             if user.role != 'Customer':
                 flash("Staff members must use the Admin Login Portal.", "warning")
                 return redirect(url_for('login'))
                 
-            # EXISTING CUSTOMER: Generate OTP & Redirect to Verify
+            # EXISTING CUSTOMER: Default to OTP
             otp = f"{random.randint(100000, 999999)}"
             user.otp = otp
             user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
@@ -506,12 +506,40 @@ def store_auth():
             
             session['pending_user_id'] = user.id
             return redirect(url_for('store_verify'))
-            
         else:
-            # NEW USER: Redirect to Sign Up
             return redirect(url_for('store_signup_details'))
             
     return render_template('store_auth.html')
+
+@app.route('/store/login/password', methods=['GET', 'POST'])
+def store_login_password():
+    """Allows customers to log in using a password instead of OTP."""
+    if g.user: return redirect(url_for('store_home'))
+
+    if request.method == 'POST':
+        email = request.form.get('email').strip().lower()
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if user and user.role == 'Customer':
+            # Check password hash OR plain text (legacy support)
+            is_correct = False
+            if user.password.startswith('scrypt:'):
+                is_correct = check_password_hash(user.password, password)
+            else:
+                is_correct = (user.password == password)
+
+            if is_correct:
+                session['user_id'] = user.id
+                flash(f"Welcome back, {user.first_name}!", "success")
+                return redirect(url_for('store_home'))
+            else:
+                flash("Incorrect password.", "danger")
+        else:
+            flash("Account not found. Please sign up.", "warning")
+            
+    return render_template('store_login.html')
 
 @app.route('/store/signup', methods=['GET', 'POST'])
 def store_signup_details():
@@ -584,24 +612,55 @@ def store_verify():
     user = User.query.get(pending_id)
     if not user: return redirect(url_for('store_auth'))
     
+    # Check if this is a new signup (Unverified) or existing login
+    is_new_signup = not user.is_verified
+
     if request.method == 'POST':
-        otp_input = request.form.get('otp')
-        
-        if user.otp == otp_input and user.otp_expiry > datetime.utcnow():
-            user.otp = None
-            user.is_verified = True
-            db.session.commit()
+        # --- OTP SUBMISSION ---
+        if 'otp' in request.form:
+            otp_input = request.form.get('otp')
+            if user.otp == otp_input and user.otp_expiry > datetime.utcnow():
+                user.otp = None
+                user.is_verified = True
+                db.session.commit()
+                
+                session['user_id'] = user.id
+                session.pop('auth_email', None)
+                session.pop('pending_user_id', None)
+                
+                flash(f"Welcome back, {user.first_name}!", "success")
+                return redirect(url_for('store_home')) 
+            else:
+                flash("Invalid or expired code. Please try again.", "danger")
+
+        # --- PASSWORD SUBMISSION (Existing Users Only) ---
+        elif 'password' in request.form:
+            if is_new_signup:
+                flash("Please verify your email with the code first.", "warning")
+            else:
+                password = request.form.get('password')
+                # Check password hash OR plain text (legacy support)
+                is_correct = False
+                if user.password.startswith('scrypt:'):
+                    is_correct = check_password_hash(user.password, password)
+                else:
+                    is_correct = (user.password == password)
+
+                if is_correct:
+                    # Clear OTP if they used password
+                    user.otp = None
+                    db.session.commit()
+                    
+                    session['user_id'] = user.id
+                    session.pop('auth_email', None)
+                    session.pop('pending_user_id', None)
+                    
+                    flash(f"Welcome back, {user.first_name}!", "success")
+                    return redirect(url_for('store_home'))
+                else:
+                    flash("Incorrect password.", "danger")
             
-            session['user_id'] = user.id
-            session.pop('auth_email', None)
-            session.pop('pending_user_id', None)
-            
-            flash(f"Welcome back, {user.first_name}!", "success")
-            return redirect(url_for('store_home')) 
-        else:
-            flash("Invalid or expired code. Please try again.", "danger")
-            
-    return render_template('store_verify.html', email=user.email)
+    return render_template('store_verify.html', email=user.email, is_new_signup=is_new_signup)
 
 @app.route('/store/resend')
 def store_resend():
@@ -814,33 +873,58 @@ def verify_email_change():
 @app.route('/store/profile/payment', methods=['POST'])
 def update_payment():
     if not g.user: return redirect(url_for('store_auth'))
-    card_number = request.form.get('card_number')
+    
+    cardholder = request.form.get('cardholder_name')
+    card_number = request.form.get('card_number', '').replace(' ', '')
     expiry = request.form.get('expiry')
-    if card_number and expiry:
+    
+    if card_number and expiry and cardholder:
         last4 = card_number[-4:]
-        card_type = "Visa" if card_number.startswith('4') else "Mastercard"
-        new_card = PaymentMethod(user_id=g.user.id, card_type=card_type, last4=last4, expiry=expiry)
+        
+        # Simple Brand Detection
+        card_type = "Visa"
+        if card_number.startswith('5'): card_type = "Mastercard"
+        elif card_number.startswith('34') or card_number.startswith('37'): card_type = "Amex"
+        elif card_number.startswith('6'): card_type = "Discover"
+        
+        new_card = PaymentMethod(
+            user_id=g.user.id, 
+            cardholder_name=cardholder,
+            card_type=card_type, 
+            last4=last4, 
+            expiry=expiry
+        )
         db.session.add(new_card)
         db.session.commit()
-        flash("Payment method added successfully.", "success")
+        flash(f"{card_type} ending in {last4} added.", "success")
     else:
         flash("Invalid card details.", "danger")
+    return redirect(url_for('store_profile'))
+
+@app.route('/store/profile/delete_payment/<int:pm_id>')
+def delete_payment(pm_id):
+    if not g.user: return redirect(url_for('store_auth'))
+    pm = PaymentMethod.query.get(pm_id)
+    if pm and pm.user_id == g.user.id:
+        db.session.delete(pm)
+        db.session.commit()
+        flash("Payment method removed.", "success")
     return redirect(url_for('store_profile'))
 
 # --- CART & CHECKOUT ---
 
 @app.route('/cart', methods=['GET', 'POST'])
 def store_cart():
-    # Guests CAN access this and add items to session['cart']
     if 'cart' not in session: session['cart'] = {}
+    
     if request.method == 'POST':
         p_id = request.form.get('product_id')
         qty = int(request.form.get('quantity', 1))
         product = Product.query.get(p_id)
+        
         if product:
             cart = session['cart']
-            # Convert to string for JSON serialization consistency
-            p_id_str = str(p_id) 
+            p_id_str = str(p_id)
             if p_id_str in cart: 
                 cart[p_id_str]['qty'] += qty
             else:
@@ -852,9 +936,20 @@ def store_cart():
                     'category': product.category
                 }
             session.modified = True
+            
+            # --- AJAX RESPONSE (Prevents Page Refresh) ---
+            # If the browser sent this via JS fetch/AJAX
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                cart_count = sum(item['qty'] for item in cart.values())
+                return json.dumps({
+                    'status': 'success', 
+                    'cart_count': cart_count, 
+                    'message': f'Added {product.name}'
+                })
+            
+            # Fallback for non-JS browsers
             flash(f'Added {product.name} to cart!', 'success')
-        # Redirect back to the page they came from (Shop or Product)
-        return redirect(request.referrer or url_for('store_cart'))
+            return redirect(request.referrer or url_for('store_cart'))
         
     totals = calculate_cart_totals(session['cart'])
     cart_items = []
@@ -884,51 +979,93 @@ def update_cart():
 
 @app.route('/checkout', methods=['GET', 'POST'])
 def store_checkout():
-    # GUEST MODE RESTRICTION:
-    # If user is not logged in (g.user is None), deny checkout.
     if not g.user:
-        flash("You are currently in Guest Mode. Please Sign In or Sign Up to checkout.", "info")
+        flash("Please sign in to checkout.", "warning")
         return redirect(url_for('store_auth')) 
-        
     if not session.get('cart'): return redirect(url_for('store_shop'))
     
     totals = calculate_cart_totals(session['cart'])
     
     if request.method == 'POST':
         try:
+            # 1. Determine Payment Method
+            payment_type = request.form.get('payment_type') # 'card', 'paypal', 'google', 'apple'
+            
+            # 2. Logic for different payments
+            payment_details_log = f"Paid via {payment_type}"
+            
+            if payment_type == 'card':
+                card_choice = request.form.get('card_choice') # 'saved' or 'new'
+                
+                if card_choice == 'saved':
+                    pm_id = request.form.get('saved_pm_id')
+                    pm = PaymentMethod.query.get(pm_id)
+                    if pm and pm.user_id == g.user.id:
+                        payment_details_log = f"Paid via Saved {pm.card_type} (**{pm.last4})"
+                    else:
+                        raise Exception("Invalid saved card selected.")
+                
+                elif card_choice == 'new':
+                    # Validate New Card Inputs (Basic Check)
+                    c_num = request.form.get('card_number', '').replace(' ', '')
+                    c_name = request.form.get('card_name')
+                    if len(c_num) < 13: raise Exception("Invalid Card Number")
+                    if not c_name: raise Exception("Cardholder Name Required")
+                    
+                    # Optional: Save this card if checkbox checked? (Not implemented for checkout flow to keep it simple)
+                    brand = "Visa"
+                    if c_num.startswith('34') or c_num.startswith('37'): brand = "Amex"
+                    elif c_num.startswith('5'): brand = "Mastercard"
+                    payment_details_log = f"Paid via New {brand} (**{c_num[-4:]})"
+            
+            # 3. Create Order & Invoice (Standard Flow)
             name = request.form.get('name', f"{g.user.first_name} {g.user.last_name}")
             address = request.form['address']
+            
             client = Client.query.filter_by(email=g.user.email).first()
             if not client:
                 client = Client(name=name, email=g.user.email, company="Online Customer")
                 db.session.add(client)
                 db.session.commit()
+            
             order_code = f"ORD-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
             new_order = Order(
                 order_code=order_code, client_id=client.id,
-                description=f"Online Order - Shipping to: {address}",
+                description=f"Online Order - {payment_details_log}",
                 amount=totals['grand_total'], status='Invoiced', date_placed=datetime.utcnow()
             )
             db.session.add(new_order)
             db.session.flush()
+            
             for p_id, item in session['cart'].items():
                 order_item = OrderItem(order_id=new_order.id, item_name=item['name'], quantity=item['qty'], unit_price=item['price'], total_price=item['price']*item['qty'])
                 db.session.add(order_item)
+                
+                # Stock Deduct
+                prod = Product.query.get(int(p_id))
+                if prod:
+                    prod.stock -= item['qty']
+                    prod.sales_count += item['qty']
+            
             if totals['shipping'] > 0: db.session.add(OrderItem(order_id=new_order.id, item_name="Shipping Fee", quantity=1, unit_price=totals['shipping'], total_price=totals['shipping']))
             if totals['gst'] > 0: db.session.add(OrderItem(order_id=new_order.id, item_name="GST (9%)", quantity=1, unit_price=totals['gst'], total_price=totals['gst']))
+            
             inv_code = f"INV-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
             new_invoice = Invoice(invoice_code=inv_code, order_id=new_order.id, client_id=client.id, amount=totals['grand_total'], status='Paid', date_created=datetime.utcnow(), date_due=datetime.utcnow())
             db.session.add(new_invoice)
             db.session.commit()
+            
             session.pop('cart', None)
-            log_action('Customer', g.user.username, 'Online Purchase', 'Order', order_code, 'Success', 'Web order placed')
+            log_action('Customer', g.user.username, 'Online Purchase', 'Order', order_code, 'Success', payment_details_log)
             flash(f"Order placed successfully! Ref: {order_code}", "success")
             return redirect(url_for('store_home'))
+            
         except Exception as e:
             db.session.rollback()
-            flash(f"Error: {str(e)}", "danger")
-            return redirect(url_for('store_cart'))
-    return render_template('store_checkout.html', totals=totals, user=g.user)
+            flash(f"Payment Error: {str(e)}", "danger")
+            return redirect(url_for('store_checkout'))
+            
+    return render_template('store_checkout.html', totals=totals, user=g.user, saved_methods=g.user.payment_methods)
 
 @app.route('/product/<int:product_id>')
 def store_product(product_id):
@@ -1186,10 +1323,12 @@ if __name__ == '__main__':
                         )
                     """))
                 except: pass
+                try: conn.execute(text("ALTER TABLE payment_method ADD COLUMN cardholder_name VARCHAR(100)"))
+                except: pass
         except: pass
         
         db.create_all()
-        
+
                 # --- SEED PRODUCTS ---
         try:
             seed_products()

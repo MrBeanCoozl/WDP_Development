@@ -4,6 +4,19 @@
 
 {% block content %}
 
+<style>
+    .flying-img {
+        position: fixed;
+        z-index: 9999;
+        border-radius: 50%;
+        opacity: 0.9;
+        pointer-events: none;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        /* SLOWED DOWN: 0.8s -> 1.2s */
+        transition: all 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+</style>
+
 <section style="position: relative; height: 90vh; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #000;">
     <div style="position: absolute; inset: 0; opacity: 0.6;">
         <img src="https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=2070&auto=format&fit=crop" 
@@ -48,9 +61,9 @@
             <div class="product-card">
                 <div class="card-image-wrap">
                     <a href="{{ url_for('store_product', product_id=product.id) }}">
-                        <img src="{{ product.image_url }}" alt="{{ product.name }}">
+                        <img src="{{ product.image_url }}" alt="{{ product.name }}" id="img-home-{{ product.id }}">
                     </a>
-                    <form action="{{ url_for('store_cart') }}" method="POST">
+                    <form action="{{ url_for('store_cart') }}" method="POST" class="ajax-cart-form" data-id="{{ product.id }}" data-prefix="home-">
                         <input type="hidden" name="product_id" value="{{ product.id }}">
                         <input type="hidden" name="quantity" value="1">
                         <button type="submit" class="quick-add-icon" title="Add to Cart">
@@ -91,9 +104,9 @@
             <div class="product-card">
                 <div class="card-image-wrap">
                     <a href="{{ url_for('store_product', product_id=product.id) }}">
-                        <img src="{{ product.image_url }}" alt="{{ product.name }}">
+                        <img src="{{ product.image_url }}" alt="{{ product.name }}" id="img-top-{{ product.id }}">
                     </a>
-                    <form action="{{ url_for('store_cart') }}" method="POST">
+                    <form action="{{ url_for('store_cart') }}" method="POST" class="ajax-cart-form" data-id="{{ product.id }}" data-prefix="top-">
                         <input type="hidden" name="product_id" value="{{ product.id }}">
                         <input type="hidden" name="quantity" value="1">
                         <button type="submit" class="quick-add-icon" title="Add to Cart">
@@ -191,19 +204,90 @@
 </section>
 
 <script>
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) entry.target.classList.add('show');
+    document.addEventListener('DOMContentLoaded', function() {
+        // ... [Intersection Observer code] ...
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) entry.target.classList.add('show');
+            });
+        }, { threshold: 0.1 });
+        document.querySelectorAll('.section-pad').forEach((el) => {
+            el.classList.add('hidden');
+            observer.observe(el);
         });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.section-pad').forEach((el) => {
-        el.classList.add('hidden');
-        observer.observe(el);
+
+        // AJAX Add to Cart Logic
+        const forms = document.querySelectorAll('.ajax-cart-form');
+        forms.forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault(); 
+                
+                const btn = this.querySelector('button');
+                const productId = this.dataset.id;
+                const prefix = this.dataset.prefix || '';
+                const sourceImg = document.getElementById(`img-${prefix}${productId}`);
+                const cartIcon = document.querySelector('.fa-bag-shopping');
+                
+                // Animation
+                if (sourceImg && cartIcon) {
+                    const flyingImg = sourceImg.cloneNode();
+                    flyingImg.classList.add('flying-img');
+                    
+                    const startRect = sourceImg.getBoundingClientRect();
+                    const endRect = cartIcon.getBoundingClientRect();
+                    
+                    flyingImg.style.width = startRect.width + 'px';
+                    flyingImg.style.height = startRect.height + 'px';
+                    flyingImg.style.top = startRect.top + 'px';
+                    flyingImg.style.left = startRect.left + 'px';
+                    
+                    document.body.appendChild(flyingImg);
+                    
+                    void flyingImg.offsetWidth; // Trigger reflow
+                    
+                    flyingImg.style.top = (endRect.top + 5) + 'px';
+                    flyingImg.style.left = (endRect.left + 5) + 'px';
+                    flyingImg.style.width = '20px';
+                    flyingImg.style.height = '20px';
+                    flyingImg.style.opacity = '0';
+                    
+                    // SLOWED DOWN: 1.2s timeout to match CSS
+                    setTimeout(() => {
+                        flyingImg.remove();
+                        cartIcon.parentElement.style.transform = 'scale(1.2)';
+                        cartIcon.parentElement.style.transition = 'transform 0.2s';
+                        setTimeout(() => cartIcon.parentElement.style.transform = 'scale(1)', 200);
+                    }, 1200);
+                }
+                
+                // Fetch Request
+                const formData = new FormData(this);
+                fetch("{{ url_for('store_cart') }}", {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        let badge = document.querySelector('.nav-icon .badge');
+                        if (!badge) {
+                            badge = document.createElement('span');
+                            badge.className = 'badge';
+                            document.querySelector('.fa-bag-shopping').parentElement.appendChild(badge);
+                        }
+                        badge.textContent = data.cart_count;
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        });
     });
 </script>
 
 <style>
-    /* --- UTILITIES --- */
+    /* ... [Keep existing styles] ... */
+    /* ... [Only verify the .flying-img CSS block matches the one at the top of this file] ... */
     :root { --bg-light: #f9f9f9; --text-dark: #111; --muted: #777; --gold: #FFD700; }
     .bg-white { background: #fff; } .bg-light { background: var(--bg-light); } .text-center { text-align: center; } .relative { position: relative; } .overflow-hidden { overflow: hidden; }
     .mb-10 { margin-bottom: 10px; } .mb-40 { margin-bottom: 40px; } .mb-50 { margin-bottom: 50px; }
@@ -317,5 +401,4 @@
         .static-grid { grid-template-columns: 1fr; }
     }
 </style>
-
 {% endblock %}
