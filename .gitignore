@@ -1,2 +1,5 @@
-business_data.db
+# .gitignore
+.env
+instance/
+__pycache__/
 *.db

@@ -17,7 +17,30 @@ import re
 import traceback
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from dotenv import load_dotenv
+from authlib.integrations.flask_client import OAuth
 
+load_dotenv()
+
+# 2. CREATE the Flask app instance (This defines the name 'app')
+app = Flask(__name__)
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
+
+# 3. Configure Google Credentials
+app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
+app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
+
+# 4. NOW initialize OAuth using the 'app' we just created
+oauth = OAuth(app)
+
+# 5. Register Google
+google = oauth.register(
+    name='google',
+    client_id=app.config.get('GOOGLE_CLIENT_ID'),
+    client_secret=app.config.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
 # Google Auth Library Check
 try:
     from authlib.integrations.flask_client import OAuth
@@ -50,8 +73,11 @@ app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'.strip()
 app.config['SMTP_PASSWORD'] = 'xfxx kqbw mrsv wsvc'.strip()
 
 # --- GOOGLE OAUTH SETUP ---
-app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID') or 'YOUR_REAL_GOOGLE_CLIENT_ID'
-app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET') or 'YOUR_REAL_GOOGLE_CLIENT_SECRET'
+print(f"DEBUG: Found Client ID? {'YES' if os.environ.get('GOOGLE_CLIENT_ID') else 'NO'}")
+
+app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
+app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
+
 
 if authlib_installed:
     oauth = OAuth(app)
@@ -680,11 +706,14 @@ def store_resend():
 # --- SOCIAL AUTH ---
 @app.route('/auth/google')
 def google_login():
-    if not authlib_installed:
-        flash("Google Login disabled.", "danger")
+    cid = app.config.get('GOOGLE_CLIENT_ID')
+    
+    # If CID is None or the placeholder text, it means .env isn't loading
+    if not cid or "YOUR_REAL" in cid:
+        print(f"ERROR: Client ID is missing. Value is: {cid}")
+        flash("Google Auth is not configured. Check your .env file.", "danger")
         return redirect(url_for('store_auth'))
-    if "YOUR_REAL" in app.config.get('GOOGLE_CLIENT_ID', 'YOUR_REAL'):
-        return redirect(url_for('google_callback', simulated='true'))
+        
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri)
 
@@ -697,37 +726,139 @@ def google_callback():
             last_name = "User"
         else:
             token = google.authorize_access_token()
-            user_info = google.parse_id_token(token)
+            user_info = google.userinfo() # Fixed Nonce Error
             email = user_info['email']
             first_name = user_info.get('given_name', '')
             last_name = user_info.get('family_name', '')
 
         user = User.query.filter_by(email=email).first()
+        
+        # 1. Create Account if it doesn't exist
         if not user:
             count = User.query.count() + 1
             custom_id = f"CUST-{datetime.now().year}-{count:03d}"
             user = User(
                 custom_id=custom_id, username=email, email=email,
-                password="GOOGLE_OAUTH_USER", first_name=first_name, last_name=last_name,
+                # We use a specific placeholder to identify users who haven't set a password yet
+                password="GOOGLE_OAUTH_USER", 
+                first_name=first_name, last_name=last_name,
                 role='Customer', auth_provider='google', is_verified=True
             )
             db.session.add(user)
             db.session.commit()
+            
+            # New User -> Log in and send to Password Setup
             session['user_id'] = user.id
-            flash("Account created via Google.", "info")
-            return redirect(url_for('store_home'))
+            flash("Account created! Please set a password to secure your account.", "info")
+            return redirect(url_for('store_setup_password'))
         
-        # Ensure only customers can use Google Login
+        # 2. If Account Exists, check Role
         if user.role != 'Customer':
             flash("Staff accounts cannot use Social Login. Please use Admin Login.", "danger")
             return redirect(url_for('login'))
 
+        # 3. Log In
         session['user_id'] = user.id
+        
+        # CHECK: Does this user still have the placeholder password?
+        if user.password == "GOOGLE_OAUTH_USER":
+            flash("Please set a password for your account.", "info")
+            return redirect(url_for('store_setup_password'))
+
         flash("Successfully signed in with Google.", "success")
         return redirect(url_for('store_home'))
+
     except Exception as e:
-        flash("Google Sign-In failed.", "danger")
+        import traceback
+        print("\n\n========== GOOGLE LOGIN ERROR ==========")
+        print(f"Error Type: {type(e).__name__}")
+        print(f"Error Message: {str(e)}")
+        print(traceback.format_exc())
+        print("========================================\n\n")
+        
+        flash(f"Google Sign-In failed: {str(e)}", "danger")
         return redirect(url_for('store_auth'))
+
+@app.route('/store/setup_password', methods=['GET', 'POST'])
+def store_setup_password():
+    # Ensure user is logged in (via Google)
+    if not g.user:
+        flash("Please log in first.", "warning")
+        return redirect(url_for('store_auth'))
+    
+    # Optional: Prevent users with real passwords from accidentally accessing this
+    if g.user.password != "GOOGLE_OAUTH_USER":
+        return redirect(url_for('store_home'))
+
+    if request.method == 'POST':
+        phone = request.form.get('phone')
+        password = request.form.get('password')
+        confirm = request.form.get('confirm_password')
+        
+        if password != confirm:
+            flash("Passwords do not match.", "danger")
+        else:
+            valid, msg = is_password_strong(password)
+            if not valid:
+                flash(f"Weak Password: {msg}", "danger")
+            else:
+                try:
+                    # 1. Update User Details
+                    g.user.password = generate_password_hash(password)
+                    g.user.phone = phone
+                    
+                    # 2. Generate OTP for Verification
+                    otp = f"{random.randint(100000, 999999)}"
+                    g.user.otp = otp
+                    g.user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+                    # We mark them as unverified until they pass this check
+                    g.user.is_verified = False 
+                    
+                    db.session.commit()
+                    
+                    # 3. Send OTP
+                    send_otp_email(g.user.email, otp)
+                    print(f"\n[SETUP OTP] Code for {g.user.email}: {otp}\n")
+                    
+                    # 4. Prepare for Verification Page
+                    # We store the ID in 'pending' and LOG THEM OUT so verify works normally
+                    session['pending_user_id'] = g.user.id
+                    session['auth_email'] = g.user.email
+                    session.pop('user_id', None) 
+                    
+                    flash("Details saved! Please verify your identity to continue.", "success")
+                    return redirect(url_for('store_verify'))
+                    
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f"Error saving details: {str(e)}", "danger")
+                
+    return render_template('store_setup_password.html')
+
+@app.route('/store/profile/delete', methods=['POST'])
+def delete_account():
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    try:
+        # 1. Delete associated payment methods first (Foreign Key cleanup)
+        PaymentMethod.query.filter_by(user_id=g.user.id).delete()
+        
+        # 2. Delete the user record
+        username = g.user.username # Save for logging
+        db.session.delete(g.user)
+        db.session.commit()
+        
+        # 3. Log user out
+        session.clear()
+        
+        print(f"\n[ACCOUNT DELETED] User: {username}\n")
+        flash("Your account has been permanently deleted.", "info")
+        return redirect(url_for('store_home'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error deleting account: {str(e)}", "danger")
+        return redirect(url_for('store_profile'))
 
 @app.route('/store/logout')
 def store_logout():
