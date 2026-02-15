@@ -155,14 +155,18 @@ def smart_pagination_filter(pagination):
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    custom_id = db.Column(db.String(50), unique=True) # e.g., USR-2025-001
+    custom_id = db.Column(db.String(50), unique=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False) 
-    role = db.Column(db.String(20), default='Staff') # 'SuperAdmin' or 'Staff'
+    role = db.Column(db.String(20), default='Staff') 
     email = db.Column(db.String(120), unique=True, nullable=True)
-    is_suspended = db.Column(db.Boolean, default=False) # Can they log in?
-    must_change_password = db.Column(db.Boolean, default=False) # Force reset on next login?
-    failed_attempts = db.Column(db.Integer, default=0) # Tracks wrong passwords
+    is_suspended = db.Column(db.Boolean, default=False)
+    must_change_password = db.Column(db.Boolean, default=False)
+    failed_attempts = db.Column(db.Integer, default=0)
+    
+    # --- ADD THESE TWO LINES HERE ---
+    otp = db.Column(db.String(6), nullable=True)
+    otp_expiry = db.Column(db.DateTime, nullable=True)
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -215,7 +219,27 @@ class AuditLog(db.Model):
     entity_id = db.Column(db.String(50)) # e.g., 'INV-123'
     status = db.Column(db.String(50)) # 'Success' or 'Failure'
     description = db.Column(db.String(255)) # Details
-
+# --- STORE HELPER: Cart Calculations ---
+def calculate_cart_totals(cart):
+    if not cart:
+        return {'subtotal': 0, 'shipping': 0, 'gst': 0, 'grand_total': 0}
+        
+    subtotal = sum(item['price'] * item['qty'] for item in cart.values())
+    
+    # Shipping Rule: Free if over $150, else $15.00
+    shipping = 0 if subtotal >= 150 else 15.00
+    
+    # GST Rule: 9% Tax on (Subtotal + Shipping)
+    gst = (subtotal + shipping) * 0.09
+    
+    grand_total = subtotal + shipping + gst
+    
+    return {
+        'subtotal': subtotal,
+        'shipping': shipping,
+        'gst': gst,
+        'grand_total': grand_total
+    }
     # --- NEW STORE MODEL ---
 class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -374,6 +398,44 @@ def operator_required(f):
             return redirect(url_for('dashboard'))
         return f(*args, **kwargs)
     return decorated_function
+
+def send_otp_email(user_email, otp_code):
+    sender_email = app.config.get('SMTP_EMAIL')
+    sender_password = app.config.get('SMTP_PASSWORD')
+    smtp_server = app.config.get('SMTP_SERVER', 'smtp.gmail.com')
+
+    if not sender_email or not sender_password:
+        # Fallback for local testing if no email configured
+        print(f"\n[DEV MODE] OTP for {user_email}: {otp_code}\n")
+        return True
+
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = user_email
+    msg['Subject'] = f"{otp_code} is your verification code"
+
+    body = f"""
+    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px; text-align: center; border: 1px solid #eee; border-radius: 8px;">
+        <h2 style="color: #111; margin-bottom: 10px;">Verify your email</h2>
+        <p style="color: #666; margin-bottom: 30px;">Use the code below to sign in to Shop.co. This code expires in 10 minutes.</p>
+        <div style="font-size: 32px; font-weight: 700; letter-spacing: 5px; color: #111; margin-bottom: 30px;">
+            {otp_code}
+        </div>
+        <p style="font-size: 12px; color: #999;">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP(smtp_server, 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, user_email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Email Error: {e}")
+        return False
 
 # ==============================================================================
 # SECTION 6: ROUTES (The Pages)
@@ -1504,23 +1566,24 @@ def store_cart():
                     'name': product.name, 
                     'price': product.price, 
                     'qty': qty, 
-                    'image': product.image_url
+                    'image': product.image_url,
+                    'category': product.category
                 }
             session.modified = True
             flash(f'Added {product.name} to cart!', 'success')
         return redirect(url_for('store_cart'))
 
-    # Calculate Totals for Display
+    # Calculate Totals using Helper
+    totals = calculate_cart_totals(session['cart'])
+    
+    # Prepare Items List
     cart_items = []
-    grand_total = 0
     for p_id, item in session['cart'].items():
-        total = item['price'] * item['qty']
-        grand_total += total
-        item['total'] = total
+        item['total'] = item['price'] * item['qty']
         item['id'] = p_id
         cart_items.append(item)
     
-    return render_template('store_cart.html', cart_items=cart_items, grand_total=grand_total)
+    return render_template('store_cart.html', cart_items=cart_items, totals=totals)
 
 @app.route('/cart/remove/<p_id>')
 def remove_from_cart(p_id):
@@ -1531,42 +1594,43 @@ def remove_from_cart(p_id):
 
 @app.route('/checkout', methods=['GET', 'POST'])
 def store_checkout():
+    # 1. Enforce Login
+    if not g.user:
+        flash("Please sign in or create an account to proceed to checkout.", "warning")
+        return redirect(url_for('store_login', next='checkout'))
+
     if not session.get('cart'): return redirect(url_for('store_shop'))
+    
+    totals = calculate_cart_totals(session['cart'])
 
     if request.method == 'POST':
         try:
-            # 1. Get Customer Details
             name = request.form['name']
             email = request.form['email']
-            address = request.form['address'] # Stored in Order description
-
-            # 2. CHECKOUT BRIDGE: Find or Create Client
+            address = request.form['address']
+            
+            # Find Client (Match by email or create new)
             client = Client.query.filter_by(email=email).first()
             if not client:
                 client = Client(name=name, email=email, company="Online Customer")
                 db.session.add(client)
-                db.session.commit() # Commit to get ID
+                db.session.commit()
             
-            # 3. Create Order
-            cart = session['cart']
-            total_amount = sum(item['price'] * item['qty'] for item in cart.values())
-            
-            # Generate Order Code
+            # Create Order
             order_code = f"ORD-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
-            
             new_order = Order(
                 order_code=order_code,
                 client_id=client.id,
                 description=f"Online Order - Shipping to: {address}",
-                amount=total_amount,
-                status='Invoiced', # Auto-complete the order
+                amount=totals['grand_total'],
+                status='Invoiced',
                 date_placed=datetime.utcnow()
             )
             db.session.add(new_order)
-            db.session.flush() # Flush to get Order ID
+            db.session.flush()
 
-            # 4. Create Order Items
-            for p_id, item in cart.items():
+            # Create Order Items
+            for p_id, item in session['cart'].items():
                 order_item = OrderItem(
                     order_id=new_order.id,
                     item_name=item['name'],
@@ -1576,25 +1640,31 @@ def store_checkout():
                 )
                 db.session.add(order_item)
 
-            # 5. AUTOMATIC INVOICE GENERATION (Paid)
+            # Add Shipping & GST as hidden line items for accounting
+            if totals['shipping'] > 0:
+                db.session.add(OrderItem(order_id=new_order.id, item_name="Shipping Fee", quantity=1, unit_price=totals['shipping'], total_price=totals['shipping']))
+            
+            if totals['gst'] > 0:
+                db.session.add(OrderItem(order_id=new_order.id, item_name="GST (9%)", quantity=1, unit_price=totals['gst'], total_price=totals['gst']))
+
+            # Create Paid Invoice
             inv_code = f"INV-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
             new_invoice = Invoice(
                 invoice_code=inv_code,
                 order_id=new_order.id,
                 client_id=client.id,
-                amount=total_amount,
-                status='Paid', # Instant payment assumed for e-commerce
+                amount=totals['grand_total'],
+                status='Paid',
                 date_created=datetime.utcnow(),
                 date_due=datetime.utcnow()
             )
             db.session.add(new_invoice)
             
-            # 6. Finalize
             db.session.commit()
-            session.pop('cart', None) # Clear Cart
+            session.pop('cart', None)
             
-            log_action('User', name, 'Online Purchase', 'Order', order_code, 'Success', f'Web order placed by {email}')
-            flash(f"Order {order_code} placed successfully! Thank you.", "success")
+            log_action('Customer', g.user.username, 'Online Purchase', 'Order', order_code, 'Success', f'Web order placed')
+            flash(f"Order placed successfully! Reference: {order_code}", "success")
             return redirect(url_for('store_home'))
 
         except Exception as e:
@@ -1602,7 +1672,9 @@ def store_checkout():
             flash(f"Error processing order: {str(e)}", "danger")
             return redirect(url_for('store_cart'))
 
-    return render_template('store_checkout.html')
+    # Pre-fill data if user has it
+    user_email = g.user.email if g.user.email else ""
+    return render_template('store_checkout.html', totals=totals, user_email=user_email)
 
 # --- UPDATE THE SEEDER IN APP.PY ---
 @app.route('/seed_products')
@@ -1659,28 +1731,164 @@ def seed_products():
     db.session.commit()
     return "Seeded database with sizes."
 
+
+# [ADD this helper function in SECTION 5 (Helper Functions)]
+def send_otp_email(user_email, otp_code):
+    sender_email = app.config.get('SMTP_EMAIL')
+    sender_password = app.config.get('SMTP_PASSWORD')
+    smtp_server = app.config.get('SMTP_SERVER', 'smtp.gmail.com')
+
+    if not sender_email or not sender_password:
+        # Fallback for local testing if no email configured
+        print(f"\n[DEV MODE] OTP for {user_email}: {otp_code}\n")
+        return True
+
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = user_email
+    msg['Subject'] = f"{otp_code} is your verification code"
+
+    body = f"""
+    <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px 20px; text-align: center; border: 1px solid #eee; border-radius: 8px;">
+        <h2 style="color: #111; margin-bottom: 10px;">Verify your email</h2>
+        <p style="color: #666; margin-bottom: 30px;">Use the code below to sign in to Shop.co. This code expires in 10 minutes.</p>
+        <div style="font-size: 32px; font-weight: 700; letter-spacing: 5px; color: #111; margin-bottom: 30px;">
+            {otp_code}
+        </div>
+        <p style="font-size: 12px; color: #999;">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
+
+    try:
+        server = smtplib.SMTP(smtp_server, 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, user_email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Email Error: {e}")
+        return False
+
+# [REPLACE the 'store_login' and 'store_signup' routes in SECTION 6 with this new flow]
+
+@app.route('/store/auth', methods=['GET', 'POST'])
+def store_auth():
+    if g.user: return redirect(url_for('store_home'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email').strip().lower()
+        
+        # 1. Generate OTP
+        otp_code = f"{random.randint(100000, 999999)}"
+        expiry = datetime.utcnow() + timedelta(minutes=10)
+        
+        # 2. Check if user exists
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            # Create a pending user record
+            # We use email as username for customers to keep it simple
+            count = User.query.count() + 1
+            custom_id = f"CUST-{datetime.now().year}-{count:03d}"
+            user = User(
+                custom_id=custom_id,
+                username=email, # Use email as username
+                email=email,
+                password=f"otp_user_{random.randint(1000,9999)}", # Dummy password
+                role='Customer',
+                otp=otp_code,
+                otp_expiry=expiry
+            )
+            db.session.add(user)
+        else:
+            # Update existing user
+            user.otp = otp_code
+            user.otp_expiry = expiry
+            
+        db.session.commit()
+        
+        # 3. Send Email
+        send_otp_email(email, otp_code)
+        
+        # 4. Store email in session for the verify step
+        session['auth_email'] = email
+        return redirect(url_for('store_verify'))
+        
+    return render_template('store_auth.html')
+
+@app.route('/store/verify', methods=['GET', 'POST'])
+def store_verify():
+    if g.user: return redirect(url_for('store_home'))
+    email = session.get('auth_email')
+    if not email: return redirect(url_for('store_auth'))
+    
+    if request.method == 'POST':
+        entered_otp = request.form.get('otp')
+        user = User.query.filter_by(email=email).first()
+        
+        if user and user.otp == entered_otp and user.otp_expiry > datetime.utcnow():
+            # SUCCESS
+            user.otp = None # Clear OTP
+            user.verified = True # (Optional flag if you added it)
+            db.session.commit()
+            
+            session['user_id'] = user.id
+            session.pop('auth_email', None)
+            
+            flash("Successfully signed in.", "success")
+            
+            # Redirect to Checkout if that was the intent
+            if request.args.get('next') == 'checkout':
+                return redirect(url_for('store_checkout'))
+            return redirect(url_for('store_home'))
+        else:
+            flash("Invalid or expired code. Please try again.", "danger")
+            
+    return render_template('store_verify.html', email=email)
+
+@app.route('/store/resend')
+def store_resend():
+    email = session.get('auth_email')
+    if email:
+        otp_code = f"{random.randint(100000, 999999)}"
+        user = User.query.filter_by(email=email).first()
+        if user:
+            user.otp = otp_code
+            user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+            db.session.commit()
+            send_otp_email(email, otp_code)
+            flash("New code sent!", "success")
+    return redirect(url_for('store_verify'))
+
+# [UPDATE store_login route to redirect to new auth]
 @app.route('/store_login')
 def store_login():
-    return render_template('store_login.html')
+    return redirect(url_for('store_auth'))
 
 @app.route('/cart/update', methods=['POST'])
 def update_cart():
     if 'cart' not in session: return redirect(url_for('store_cart'))
     
     product_id = request.form.get('product_id')
-    quantity = int(request.form.get('quantity', 1))
+    # Handle both direct update and increment/decrement
+    action = request.form.get('action')
     
     if product_id in session['cart']:
-        if quantity > 0:
-            session['cart'][product_id]['qty'] = quantity
-            flash('Cart updated.', 'success')
-        else:
-            del session['cart'][product_id] # Remove if qty is 0
-            flash('Item removed.', 'success')
-    
+        if action == 'increase':
+            session['cart'][product_id]['qty'] += 1
+        elif action == 'decrease':
+            session['cart'][product_id]['qty'] -= 1
+        elif action == 'delete':
+             del session['cart'][product_id]
+        
+        # Clean up if qty is 0
+        if product_id in session['cart'] and session['cart'][product_id]['qty'] <= 0:
+            del session['cart'][product_id]
+            
     session.modified = True
     return redirect(url_for('store_cart'))
-
 # ==============================================================================
 # SECTION 7: MAIN EXECUTION
 # This part actually starts the app when you run `python app.py`.
@@ -1688,21 +1896,31 @@ def update_cart():
 
 if __name__ == '__main__':
     with app.app_context():
-        # Ensure database tables exist
-        
-        # This part handles "migrations" (updates to the database structure) automatically
+        # 1. NEW: Add OTP columns for the Authentication Update
+        try:
+            with db.engine.connect() as conn:
+                # Try adding otp column
+                try: conn.execute(text("ALTER TABLE user ADD COLUMN otp VARCHAR(6)"))
+                except: pass
+                
+                # Try adding otp_expiry column
+                try: conn.execute(text("ALTER TABLE user ADD COLUMN otp_expiry DATETIME"))
+                except: pass
+        except: pass
+
+        # 2. Existing Migrations (Keep these to prevent errors)
         try:
             with db.engine.connect() as conn:
                 try: conn.execute(text("ALTER TABLE `order` ADD COLUMN order_code VARCHAR(50)"))
                 except: pass
-                # NEW: Add failsafe column if missing
                 try: conn.execute(text("ALTER TABLE user ADD COLUMN failed_attempts INTEGER DEFAULT 0"))
                 except: pass
         except: pass
         
+        # 3. Create Tables
         db.create_all()
         
-        # Updates old audit logs to match new naming convention
+        # 4. Updates for Audit Logs (Existing code)
         try:
             db.session.execute(text("UPDATE audit_log SET action = 'Account Suspended' WHERE action = 'Suspended User'"))
             db.session.execute(text("UPDATE audit_log SET action = 'Account Reactivated' WHERE action = 'Re-activated User'"))
@@ -1712,10 +1930,10 @@ if __name__ == '__main__':
             db.session.commit()
         except: pass
 
-        # Create Default Admin if no users exist
+        # 5. Create Default Admin (Existing code)
         if not User.query.first():
             admin = User(username='admin', password='password123', role='SuperAdmin', custom_id='USR-ADMIN-001')
             db.session.add(admin)
             db.session.commit()
             
-    app.run(debug=True) # Run the app in debug mode
+    app.run(debug=True)

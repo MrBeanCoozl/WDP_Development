@@ -1,22 +1,94 @@
 {% extends "store_base.html" %}
 {% block content %}
-<div class="container" style="max-width: 400px; text-align: center;">
-    <h1>Sign In</h1>
-    <p>View your past orders</p>
-    <div style="background: white; padding: 30px; border: 1px solid #eee; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-        <form>
-            <input type="email" placeholder="Email Address" style="width: 100%; padding: 12px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
-            <input type="password" placeholder="Password" style="width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px;">
-            <button type="button" class="btn" style="width: 100%;">Sign In</button>
+
+<style>
+    .auth-container { max-width: 450px; margin: 60px auto; }
+    .auth-tabs { display: flex; border-bottom: 1px solid #e5e5e5; margin-bottom: 30px; }
+    .tab-btn {
+        flex: 1; padding: 15px; text-align: center;
+        background: none; border: none; font-size: 14px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1px; color: #999;
+        cursor: pointer; border-bottom: 2px solid transparent; transition: 0.3s;
+    }
+    .tab-btn.active { color: black; border-bottom-color: black; }
+    
+    .auth-card { background: white; padding: 40px; border-radius: 8px; border: 1px solid #eee; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
+    
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; color: #333; }
+    .form-input { 
+        width: 100%; padding: 14px; border: 1px solid #e5e5e5; 
+        font-family: inherit; font-size: 14px; outline: none; transition: 0.2s;
+        border-radius: 4px;
+    }
+    .form-input:focus { border-color: black; }
+    
+    .auth-btn {
+        width: 100%; background: black; color: white; border: none;
+        padding: 16px; font-size: 13px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1px;
+        cursor: pointer; margin-top: 10px; transition: 0.2s;
+        border-radius: 4px;
+    }
+    .auth-btn:hover { background: #333; }
+
+    .hidden-form { display: none; }
+</style>
+
+<div class="auth-container">
+    <div class="auth-tabs">
+        <button class="tab-btn {% if request.args.get('mode') != 'signup' %}active{% endif %}" onclick="showTab('login')">Sign In</button>
+        <button class="tab-btn {% if request.args.get('mode') == 'signup' %}active{% endif %}" onclick="showTab('signup')">Create Account</button>
+    </div>
+
+    <div id="login-form" class="auth-card {% if request.args.get('mode') == 'signup' %}hidden-form{% endif %}">
+        <form action="{{ url_for('store_login', next=request.args.get('next')) }}" method="POST">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" class="form-input" required placeholder="Enter your username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" class="form-input" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="auth-btn">Sign In</button>
         </form>
-        <p style="margin-top: 20px; color: #999; font-size: 12px;">(Customer accounts are created automatically at checkout)</p>
-        
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-            <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Are you a staff member?</p>
-            <a href="{{ url_for('login') }}" style="color: #3498db; font-weight: 600; font-size: 14px; text-decoration: none;">
-                <i class="fa-solid fa-lock" style="margin-right: 5px;"></i> Access Admin Portal
-            </a>
+    </div>
+
+    <div id="signup-form" class="auth-card {% if request.args.get('mode') != 'signup' %}hidden-form{% endif %}">
+        <form action="{{ url_for('store_signup', next=request.args.get('next')) }}" method="POST">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" name="username" class="form-input" required placeholder="Choose a username">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" name="email" class="form-input" required placeholder="name@example.com">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" name="password" class="form-input" required placeholder="Create a password">
+            </div>
+            <button type="submit" class="auth-btn">Create Account</button>
+        </form>
+        <div style="margin-top: 20px; font-size: 12px; color: #777; line-height: 1.5; text-align: center;">
+            By creating an account, you agree to our Terms of Service and Privacy Policy.
         </div>
     </div>
 </div>
+
+<script>
+    function showTab(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        if(tabName === 'login') {
+            document.querySelectorAll('.tab-btn')[0].classList.add('active');
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('signup-form').style.display = 'none';
+        } else {
+            document.querySelectorAll('.tab-btn')[1].classList.add('active');
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('signup-form').style.display = 'block';
+        }
+    }
+</script>
 {% endblock %}

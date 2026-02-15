@@ -1,0 +1,45 @@
+{% extends "store_base.html" %}
+{% block content %}
+
+<style>
+    .verify-wrapper {
+        min-height: 80vh; display: flex; align-items: center; justify-content: center;
+        background: #fff; padding: 40px 20px;
+    }
+    .verify-card {
+        width: 100%; max-width: 400px; text-align: center;
+    }
+    .icon-mail { font-size: 40px; color: #111; margin-bottom: 20px; }
+    
+    .verify-input {
+        width: 100%; padding: 15px; border: 1px solid #e5e5e5;
+        border-radius: 8px; font-size: 24px; text-align: center;
+        letter-spacing: 5px; font-weight: 700; margin: 30px 0;
+        outline: none; transition: 0.2s;
+    }
+    .verify-input:focus { border-color: black; }
+    
+    .resend-link { color: #666; font-size: 14px; text-decoration: underline; cursor: pointer; }
+    .resend-link:hover { color: black; }
+</style>
+
+<div class="verify-wrapper">
+    <div class="verify-card">
+        <div class="icon-mail"><i class="fa-regular fa-envelope"></i></div>
+        <h1 style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">Check your email</h1>
+        <p style="color: #666; font-size: 15px;">We sent a temporary login code to<br><strong>{{ email }}</strong></p>
+
+        <form method="POST">
+            <input type="text" name="otp" class="verify-input" placeholder="123456" maxlength="6" required autofocus autocomplete="off">
+            <button type="submit" class="btn" style="width: 100%; padding: 16px; font-size: 14px; text-transform: uppercase;">Verify & Sign In</button>
+        </form>
+
+        <div style="margin-top: 30px;">
+            <p style="font-size: 13px; color: #999; margin-bottom: 10px;">Didn't receive the email?</p>
+            <a href="{{ url_for('store_resend') }}" class="resend-link">Click to resend</a>
+            <span style="margin: 0 10px; color: #eee;">|</span>
+            <a href="{{ url_for('store_auth') }}" class="resend-link">Change email</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

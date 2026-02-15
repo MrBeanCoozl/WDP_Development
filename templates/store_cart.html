@@ -1,62 +1,224 @@
 {% extends "store_base.html" %}
 {% block content %}
-<div class="container" style="max-width: 900px;">
-    <h1 style="font-size: 36px; font-weight: 800; margin-bottom: 40px;">Shopping Cart</h1>
 
+<style>
+    /* Premium Cart Styles */
+    .cart-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 380px;
+        gap: 60px;
+        padding-top: 40px;
+        padding-bottom: 80px;
+    }
+    
+    .cart-header h1 {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        margin-bottom: 10px;
+    }
+
+    /* Cart Items Table */
+    .cart-items { border-top: 1px solid #e5e5e5; }
+    .cart-row {
+        display: grid;
+        grid-template-columns: 100px 1fr auto;
+        gap: 25px;
+        padding: 30px 0;
+        border-bottom: 1px solid #e5e5e5;
+        align-items: center;
+    }
+    
+    .item-img {
+        width: 100px; height: 120px;
+        background: #f9f9f9;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+    
+    .item-info h3 { font-size: 16px; font-weight: 700; margin: 0 0 5px; }
+    .item-cat { font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+    .item-price { font-size: 14px; color: #555; }
+    
+    /* Quantity Control */
+    .qty-control {
+        display: flex;
+        align-items: center;
+        border: 1px solid #e5e5e5;
+        border-radius: 4px;
+        width: max-content;
+        margin-top: 15px;
+    }
+    .qty-btn {
+        background: none; border: none;
+        padding: 8px 12px;
+        cursor: pointer;
+        color: #555;
+        transition: 0.2s;
+    }
+    .qty-btn:hover { background: #f5f5f5; color: black; }
+    .qty-display {
+        font-size: 13px; font-weight: 600;
+        padding: 0 5px;
+        min-width: 20px; text-align: center;
+    }
+
+    /* Summary Card */
+    .summary-card {
+        background: #f9f9f9;
+        padding: 35px;
+        border-radius: 8px;
+        height: max-content;
+        position: sticky; top: 100px;
+    }
+    .summary-title { font-size: 18px; font-weight: 800; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .summary-row {
+        display: flex; justify-content: space-between;
+        margin-bottom: 15px; font-size: 14px; color: #555;
+    }
+    .summary-total {
+        display: flex; justify-content: space-between;
+        margin-top: 25px; padding-top: 20px;
+        border-top: 1px solid #e0e0e0;
+        font-size: 20px; font-weight: 800; color: #111;
+        margin-bottom: 30px;
+    }
+    
+    .checkout-btn {
+        display: block; width: 100%;
+        background: #111; color: white;
+        text-align: center; padding: 18px;
+        font-size: 14px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1px;
+        border: none; border-radius: 4px;
+        cursor: pointer; transition: 0.3s;
+        text-decoration: none;
+    }
+    .checkout-btn:hover { background: #333; transform: translateY(-2px); color: white; }
+
+    .payment-icons {
+        display: flex; gap: 15px; justify-content: center;
+        margin-top: 25px; opacity: 0.6;
+    }
+    .payment-icons i { font-size: 24px; }
+    
+    .shipping-badge {
+        background: #e0e7ff; color: #4338ca;
+        padding: 4px 8px; border-radius: 4px;
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+    }
+    .btn-delete { color: #e74c3c; font-size: 12px; text-decoration: underline; background: none; border: none; cursor: pointer; padding: 0; margin-left: 15px; }
+
+    @media (max-width: 900px) {
+        .cart-wrapper { grid-template-columns: 1fr; gap: 40px; }
+    }
+</style>
+
+<div class="container">
     {% if cart_items %}
-        <div style="display: grid; gap: 40px;">
-            <div style="border-top: 1px solid var(--border);">
+    <div class="cart-wrapper">
+        <div class="cart-left">
+            <div class="cart-header">
+                <h1>Shopping Bag</h1>
+                <p style="color: #777; margin-bottom: 30px;">{{ cart_items|length }} items</p>
+            </div>
+
+            <div class="cart-items">
                 {% for item in cart_items %}
-                <div style="display: grid; grid-template-columns: 100px 1fr auto; gap: 24px; padding: 24px 0; border-bottom: 1px solid var(--border);">
-                    <div style="background: #f5f5f5; border-radius: 8px; overflow: hidden; height: 100px;">
-                        <img src="{{ item.image }}" style="width: 100%; height: 100%; object-fit: cover;">
-                    </div>
+                <div class="cart-row">
+                    <img src="{{ item.image }}" class="item-img">
                     
-                    <div>
-                        <h3 style="font-size: 18px; font-weight: 600; margin: 0 0 8px;">{{ item.name }}</h3>
-                        <p style="color: var(--text-muted); font-size: 14px; margin: 0;">${{ "%.2f"|format(item.price) }}</p>
+                    <div class="item-info">
+                        <div class="item-cat">{{ item.category }}</div>
+                        <h3>{{ item.name }}</h3>
+                        <div class="item-price">${{ "%.2f"|format(item.price) }}</div>
+                        
+                        <div style="display: flex; align-items: flex-end;">
+                            <form action="{{ url_for('update_cart') }}" method="POST" class="qty-control">
+                                <input type="hidden" name="product_id" value="{{ item.id }}">
+                                <button type="submit" name="action" value="decrease" class="qty-btn"><i class="fa-solid fa-minus"></i></button>
+                                <span class="qty-display">{{ item.qty }}</span>
+                                <button type="submit" name="action" value="increase" class="qty-btn"><i class="fa-solid fa-plus"></i></button>
+                            </form>
+                            
+                            <form action="{{ url_for('update_cart') }}" method="POST">
+                                <input type="hidden" name="product_id" value="{{ item.id }}">
+                                <button type="submit" name="action" value="delete" class="btn-delete">Remove</button>
+                            </form>
+                        </div>
                     </div>
 
-                    <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between;">
-                        <div style="font-size: 18px; font-weight: 700;">${{ "%.2f"|format(item.total) }}</div>
-                        
-                        <form action="{{ url_for('update_cart') }}" method="POST" style="display: flex; align-items: center; gap: 12px;">
-                            <input type="hidden" name="product_id" value="{{ item.id }}">
-                            
-                            <div style="display: flex; align-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px;">
-                                <input type="number" name="quantity" value="{{ item.qty }}" min="0" 
-                                       style="width: 40px; border: none; text-align: center; font-weight: 600; outline: none;">
-                            </div>
-                            <button type="submit" style="font-size: 13px; font-weight: 600; color: #2563eb; background: none; border: none; cursor: pointer;">Update</button>
-                        </form>
+                    <div style="text-align: right; font-weight: 700;">
+                        ${{ "%.2f"|format(item.total) }}
                     </div>
                 </div>
                 {% endfor %}
             </div>
-
-            <div style="background: #fafafa; padding: 32px; border-radius: 12px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 16px; color: #555;">
-                    <span>Subtotal</span>
-                    <span>${{ "%.2f"|format(grand_total) }}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 24px; color: #555;">
-                    <span>Shipping</span>
-                    <span>Calculated at checkout</span>
-                </div>
-                <div style="border-top: 1px solid var(--border); padding-top: 24px; display: flex; justify-content: space-between; font-size: 24px; font-weight: 800; margin-bottom: 32px;">
-                    <span>Total</span>
-                    <span>${{ "%.2f"|format(grand_total) }}</span>
-                </div>
-                <a href="{{ url_for('store_checkout') }}" class="btn" style="width: 100%; font-size: 16px; padding: 18px;">
-                    Checkout Securely
+            
+            <div style="margin-top: 30px;">
+                <a href="{{ url_for('store_shop') }}" style="font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid black; padding-bottom: 2px;">
+                    <i class="fa-solid fa-arrow-left"></i> Continue Shopping
                 </a>
             </div>
         </div>
-    {% else %}
-        <div style="text-align: center; padding: 100px 0;">
-            <p style="color: #999; margin-bottom: 24px; font-size: 18px;">Your cart is currently empty.</p>
-            <a href="{{ url_for('store_shop') }}" class="btn">Continue Shopping</a>
+
+        <div class="cart-right">
+            <div class="summary-card">
+                <div class="summary-title">Order Summary</div>
+                
+                <div class="summary-row">
+                    <span>Subtotal</span>
+                    <span>${{ "%.2f"|format(totals.subtotal) }}</span>
+                </div>
+                
+                <div class="summary-row">
+                    <span>
+                        Shipping
+                        {% if totals.shipping == 0 %}<span class="shipping-badge">Free</span>{% endif %}
+                    </span>
+                    <span>
+                        {% if totals.shipping == 0 %}
+                            $0.00
+                        {% else %}
+                            ${{ "%.2f"|format(totals.shipping) }}
+                        {% endif %}
+                    </span>
+                </div>
+
+                <div class="summary-row">
+                    <span>GST (9%)</span>
+                    <span>${{ "%.2f"|format(totals.gst) }}</span>
+                </div>
+                
+                <div class="summary-total">
+                    <span>Total</span>
+                    <span>${{ "%.2f"|format(totals.grand_total) }}</span>
+                </div>
+
+                <a href="{{ url_for('store_checkout') }}" class="checkout-btn">
+                    {% if g.user %}Proceed to Checkout{% else %}Login to Checkout{% endif %}
+                </a>
+
+                <div class="payment-icons">
+                    <i class="fa-brands fa-cc-visa"></i>
+                    <i class="fa-brands fa-cc-mastercard"></i>
+                    <i class="fa-brands fa-cc-amex"></i>
+                    <i class="fa-brands fa-cc-paypal"></i>
+                </div>
+                
+                <div style="text-align: center; font-size: 11px; color: #999; margin-top: 20px;">
+                    <i class="fa-solid fa-lock"></i> Secure Checkout
+                </div>
+            </div>
         </div>
+    </div>
+    {% else %}
+    <div style="text-align: center; padding: 100px 0;">
+        <h2 style="font-size: 24px; font-weight: 800; text-transform: uppercase;">Your bag is empty</h2>
+        <p style="color: #777; margin: 15px 0 30px;">Looks like you haven't added anything to your cart yet.</p>
+        <a href="{{ url_for('store_shop') }}" class="checkout-btn" style="width: auto; display: inline-block; padding: 15px 40px; color: white;">Start Shopping</a>
+    </div>
     {% endif %}
 </div>
 {% endblock %}
