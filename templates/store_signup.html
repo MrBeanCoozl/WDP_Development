@@ -1,0 +1,30 @@
+{% extends "store_base.html" %}
+{% block content %}
+<style>
+    .auth-wrapper { min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+    .auth-card { width: 100%; max-width: 450px; }
+    .form-group { margin-bottom: 20px; }
+    .form-label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
+    .form-input { width: 100%; padding: 14px; border: 1px solid #e5e5e5; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+    .row { display: flex; gap: 15px; }
+    .col { flex: 1; }
+    .btn-auth { width: 100%; background: black; color: white; padding: 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 700; }
+</style>
+
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 10px;">Create your account</h2>
+        <p style="color: #666; margin-bottom: 30px; font-size: 14px;">Complete your details to finish signing up as <strong>{{ email }}</strong></p>
+        <form method="POST">
+            <div class="row">
+                <div class="col form-group"><label class="form-label">First Name</label><input type="text" name="first_name" class="form-input" required></div>
+                <div class="col form-group"><label class="form-label">Last Name</label><input type="text" name="last_name" class="form-input" required></div>
+            </div>
+            <div class="form-group"><label class="form-label">Phone Number</label><input type="tel" name="phone" class="form-input" placeholder="+65 9123 4567" required></div>
+            <div class="form-group"><label class="form-label">Password</label><input type="password" name="password" class="form-input" required></div>
+            <button type="submit" class="btn-auth">Create Account & Verify</button>
+        </form>
+        <div style="text-align: center; margin-top: 20px;"><a href="{{ url_for('store_auth') }}" style="font-size: 12px; color: #666; text-decoration: underline;">Change Email</a></div>
+    </div>
+</div>
+{% endblock %}
