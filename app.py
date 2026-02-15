@@ -226,6 +226,7 @@ class Product(db.Model):
     description = db.Column(db.String(500))
     stock = db.Column(db.Integer, default=100)
     sales_count = db.Column(db.Integer, default=0)
+    sizes = db.Column(db.String(200)) # Stores "S,M,L" or "7,8,9,10"
 # Update Client to handle store users (Optional: Add password later for full login)
 # For now, we match by Email during checkout.
 # ==============================================================================
@@ -1401,33 +1402,79 @@ def store_home():
     featured = Product.query.limit(4).all()
     return render_template('store_home.html', featured=featured)
 
+# --- RESTRUCTURED STORE SHOP ROUTE ---
 @app.route('/shop')
 def store_shop():
-    # 1. Get Filter Parameters
     search_query = request.args.get('q', '')
-    category_filter = request.args.get('category', 'All')
-    price_min = request.args.get('min_price', 0, type=int)
-    price_max = request.args.get('max_price', 1000, type=int)
-
-    # 2. Build the Query
-    query = Product.query
+    category_filter = request.args.get('category', 'All') 
+    sort_by = request.args.get('sort', 'newest')
+    min_price = request.args.get('min_price', type=float)
+    max_price = request.args.get('max_price', type=float)
     
+    # Get selected sizes (list)
+    selected_sizes = request.args.getlist('size')
+    
+    page = request.args.get('page', 1, type=int)
+    per_page = 12
+
+    # Query
+    query = Product.query
+
     if search_query:
         query = query.filter(Product.name.ilike(f'%{search_query}%'))
     
     if category_filter != 'All':
         query = query.filter(Product.category == category_filter)
         
-    query = query.filter(Product.price >= price_min)
-    query = query.filter(Product.price <= price_max)
+    if min_price is not None:
+        query = query.filter(Product.price >= min_price)
+    if max_price is not None:
+        query = query.filter(Product.price <= max_price)
 
-    products = query.all()
+    # Size Filtering Logic (Matches if product has ANY of the selected sizes)
+    if selected_sizes:
+        # This is a basic implementation. Ideally, use a many-to-many relationship.
+        # Here we check if the sizes string contains the selected size.
+        size_filters = []
+        for size in selected_sizes:
+            size_filters.append(Product.sizes.ilike(f'%{size}%'))
+        from sqlalchemy import or_
+        query = query.filter(or_(*size_filters))
+
+    # Sorting
+    if sort_by == 'price_low':
+        query = query.order_by(Product.price.asc())
+    elif sort_by == 'price_high':
+        query = query.order_by(Product.price.desc())
+    elif sort_by == 'popularity':
+        query = query.order_by(Product.sales_count.desc())
+    else:
+        query = query.order_by(Product.id.desc())
+
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    products = pagination.items
     
-    # Get unique categories for the filter sidebar
-    categories = [r.category for r in db.session.query(Product.category).distinct()]
+    all_categories = ['Formal', 'Casual', 'Shoes', 'Accessories']
 
-    return render_template('store_shop.html', products=products, categories=categories, 
-                           current_cat=category_filter, search_query=search_query)
+    # Get Price Range for Slider
+    price_stats = db.session.query(func.min(Product.price), func.max(Product.price)).first()
+    db_min_price = int(price_stats[0]) if price_stats[0] else 0
+    db_max_price = int(price_stats[1]) if price_stats[1] else 500
+
+    return render_template(
+        'store_shop.html', 
+        products=products, 
+        pagination=pagination,
+        all_categories=all_categories,
+        current_cat=category_filter, 
+        current_sort=sort_by, 
+        search_query=search_query,
+        current_min_price=min_price,
+        current_max_price=max_price,
+        db_min_price=db_min_price,
+        db_max_price=db_max_price,
+        selected_sizes=selected_sizes
+    )
 
 @app.route('/product/<int:product_id>')
 def store_product(product_id):
@@ -1556,53 +1603,37 @@ def store_checkout():
 # --- UPDATE THE SEEDER IN APP.PY ---
 @app.route('/seed_products')
 def seed_products():
-    if Product.query.count() > 0: return "Database already has products."
+    if Product.query.count() > 0: return "Database already populated."
     
-    products = [
-        # 1. STREETWEAR (Casual Vibe)
-        Product(name="Oversized Boxy Tee", price=45.00, category="Tops", 
-                image_url="https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=600&q=80", 
-                description="Heavyweight cotton tee with a boxy street fit.", sales_count=342),
-        
-        # 2. RALPH LAUREN VIBE (Formal/Smart)
-        Product(name="Signature Oxford Shirt", price=89.00, category="Formal", 
-                image_url="https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=600&q=80", 
-                description="Tailored fit oxford shirt for a polished look.", sales_count=120),
-        
-        # 3. NIKE VIBE (Shoes)
-        Product(name="Air Retro High OG", price=180.00, category="Shoes", 
-                image_url="https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?auto=format&fit=crop&w=600&q=80", 
-                description="Iconic silhouette with premium leather cushioning.", sales_count=560),
-        
-        # 4. MLB VIBE (Accessories/Caps)
-        Product(name="NY Heritage Cap", price=35.00, category="Accessories", 
-                image_url="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=600&q=80", 
-                description="Classic 6-panel structured cap in navy blue.", sales_count=215),
+    products = []
 
-        # 5. STREETWEAR (Outerwear)
-        Product(name="Essentials Fleece Hoodie", price=95.00, category="Outerwear", 
-                image_url="https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=600&q=80", 
-                description="The ultimate comfort hoodie in neutral beige.", sales_count=410),
+    # 1. FORMAL (Sizes: S, M, L, XL or 38, 40, 42)
+    formal_imgs = ["https://images.unsplash.com/photo-1600091106787-88069af720c2?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1598033129183-c4f50c736f10?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1473966968600-fa801b869a1a?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1591047139829-d91aecb6caea?q=80&w=600&auto=format&fit=crop"]
+    names = ["Signature Oxford Shirt", "Pleated Wool Trousers", "Classic Navy Blazer", "Silk Knit Tie"]
+    for i in range(4):
+        products.append(Product(name=names[i], price=85.00+(i*20), category="Formal", image_url=formal_imgs[i], description="Timeless elegance.", sales_count=50, sizes="S,M,L,XL,XXL"))
 
-        # 6. RALPH LAUREN VIBE (Bottoms)
-        Product(name="Pleated Chino Trousers", price=75.00, category="Formal", 
-                image_url="https://images.unsplash.com/photo-1473966968600-fa801b869a1a?auto=format&fit=crop&w=600&q=80", 
-                description="Smart casual trousers with a relaxed taper.", sales_count=89),
+    # 2. CASUAL (Sizes: S, M, L, XL)
+    casual_imgs = ["https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1576871337622-98d48d1cf531?q=80&w=600&auto=format&fit=crop"]
+    names = ["Heavyweight Boxy Tee", "Utility Cargo Pants", "Essential Fleece Hoodie", "Vintage Wash Denim"]
+    for i in range(4):
+        products.append(Product(name=names[i], price=45.00+(i*10), category="Casual", image_url=casual_imgs[i], description="Effortless style.", sales_count=100, sizes="XS,S,M,L,XL"))
 
-        # 7. NIKE VIBE (Activewear)
-        Product(name="Pro Performance Runners", price=140.00, category="Shoes", 
-                image_url="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80", 
-                description="Engineered for speed and endurance.", sales_count=320),
+    # 3. SHOES (Sizes: 7, 8, 9, 10, 11)
+    shoe_imgs = ["https://images.unsplash.com/photo-1515955656352-a1fa3ffcd111?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1614252369475-531eba835eb1?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?q=80&w=600&auto=format&fit=crop"]
+    names = ["Air Retro High OG", "Pro Performance Runner", "Suede Chelsea Boot", "Court Legacy Low"]
+    for i in range(4):
+        products.append(Product(name=names[i], price=120.00+(i*15), category="Shoes", image_url=shoe_imgs[i], description="Engineered for comfort.", sales_count=200, sizes="7,8,9,10,11,12"))
 
-        # 8. CASUAL
-        Product(name="Utility Cargo Pants", price=65.00, category="Bottoms", 
-                image_url="https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&w=600&q=80", 
-                description="Functional cargo pants with multiple pockets.", sales_count=150)
-    ]
+    # 4. ACCESSORIES (Sizes: One Size)
+    acc_imgs = ["https://images.unsplash.com/photo-1588850561407-ed78c282e89b?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1553062407-98eeb64c6a62?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1511499767150-a48a237f0083?q=80&w=600&auto=format&fit=crop","https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=600&auto=format&fit=crop"]
+    names = ["NY Heritage Cap", "Leather Weekender Bag", "Classic Acetate Shades", "Minimalist Watch"]
+    for i in range(4):
+        products.append(Product(name=names[i], price=35.00+(i*10), category="Accessories", image_url=acc_imgs[i], description="The perfect touch.", sales_count=80, sizes="One Size"))
     
     db.session.add_all(products)
     db.session.commit()
-    return "Seeded database with Pro Brand Images."
+    return "Seeded database with Products & Sizes."
 
 @app.route('/store_login')
 def store_login():
