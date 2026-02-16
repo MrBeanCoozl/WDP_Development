@@ -18,6 +18,7 @@ import traceback
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
+from flask import Flask, render_template, request, redirect, url_for, flash, session, g, jsonify
 
 # Load environment variables
 load_dotenv()
@@ -1348,6 +1349,128 @@ def invoices():
     query = Invoice.query.order_by(Invoice.date_created.desc())
     invoices_pagination = query.paginate(page=page, per_page=10, error_out=False)
     return render_template('invoices.html', invoices=invoices_pagination)
+
+@app.route('/invoice/create/<int:order_id>', methods=['GET', 'POST'])
+@admin_required
+def create_invoice(order_id):
+    order = Order.query.get_or_404(order_id)
+    
+    # Prevent duplicate invoices
+    if order.invoice:
+        flash("Order already has an invoice.", "warning")
+        return redirect(url_for('view_invoice', invoice_id=order.invoice.id))
+        
+    if request.method == 'POST':
+        try:
+            invoice_code = f"INV-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000, 9999)}"
+            new_invoice = Invoice(
+                invoice_code=invoice_code,
+                order_id=order.id,
+                client_id=order.client_id,
+                amount=order.amount,
+                status='Pending',
+                date_due=datetime.strptime(request.form['date_due'], '%Y-%m-%d')
+            )
+            
+            order.status = 'Invoiced'
+            db.session.add(new_invoice)
+            db.session.commit()
+            
+            log_action('Admin', g.user.username, 'Created Invoice', 'Invoice', invoice_code, 'Success', f'For Order {order.order_code}')
+            flash("Invoice generated successfully.", "success")
+            return redirect(url_for('view_invoice', invoice_id=new_invoice.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error creating invoice: {str(e)}", "danger")
+            
+    # Default due date: 7 days from now
+    default_due_date = (datetime.now() + timedelta(days=7)).strftime('%Y-%m-%d')
+    return render_template('create_invoice.html', order=order, default_due_date=default_due_date)
+
+@app.route('/invoice/view/<int:invoice_id>')
+def view_invoice(invoice_id):
+    # Allow both Admins and the Customer who owns the invoice to view it
+    if not g.user: return redirect(url_for('login'))
+    
+    invoice = Invoice.query.get_or_404(invoice_id)
+    
+    # Permission Check
+    if g.user.role == 'Customer':
+        # Check if this invoice belongs to the logged-in user's client profile
+        client = Client.query.filter_by(email=g.user.email).first()
+        if not client or invoice.client_id != client.id:
+            flash("Access Denied.", "danger")
+            return redirect(url_for('store_home'))
+            
+    return render_template('view_invoice.html', invoice=invoice)
+
+@app.route('/invoice/edit/<int:invoice_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_invoice(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    
+    if request.method == 'POST':
+        invoice.status = request.form['status']
+        invoice.date_due = datetime.strptime(request.form['date_due'], '%Y-%m-%d')
+        db.session.commit()
+        
+        log_action('Admin', g.user.username, 'Edited Invoice', 'Invoice', invoice.invoice_code, 'Success', f'Status: {invoice.status}')
+        flash("Invoice updated.", "success")
+        return redirect(url_for('view_invoice', invoice_id=invoice.id))
+        
+    return render_template('edit_invoice.html', invoice=invoice)
+
+@app.route('/invoice/delete/<int:invoice_id>', methods=['POST'])
+@admin_required
+def delete_invoice(invoice_id):
+    try:
+        invoice = Invoice.query.get_or_404(invoice_id)
+        # Reset order status
+        if invoice.order:
+            invoice.order.status = 'Pending'
+            
+        db.session.delete(invoice)
+        db.session.commit()
+        flash("Invoice deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error: {str(e)}", "danger")
+        
+    return redirect(url_for('invoices'))
+
+# app.py
+
+@app.route('/invoice/log_download/<int:invoice_id>', methods=['POST'])
+def log_invoice_download(invoice_id):
+    # Security: User must be logged in
+    if not g.user: 
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+    
+    try:
+        invoice = Invoice.query.get_or_404(invoice_id)
+        
+        # Security: Customer can only log their own invoices
+        if g.user.role == 'Customer':
+            client = Client.query.filter_by(email=g.user.email).first()
+            if not client or invoice.client_id != client.id:
+                return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+
+        # Log the action
+        log_action(
+            actor_type='User', 
+            actor_id=g.user.username, 
+            action='Downloaded Invoice', 
+            entity_type='Invoice', 
+            entity_id=invoice.invoice_code, 
+            status='Success', 
+            description='PDF Download Generated'
+        )
+        
+        return jsonify({'status': 'success'})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/audit')
 def audit_log():
