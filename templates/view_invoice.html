@@ -1,255 +1,358 @@
-{% extends "base.html" %}
+{% set base_template = "store_base.html" if is_customer_view else "base.html" %}
+{% extends base_template %}
 
 {% block header %}
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span>Invoice View</span>
-    </div>
+    Invoice #{{ invoice.invoice_code }}
 {% endblock %}
 
 {% block content %}
-
 <style>
-    /* ... (Layout styles remain same) ... */
-    .invoice-box {
-        max-width: 800px; margin: 0 auto; padding: 50px;
-        border: 1px solid #eee; box-shadow: 0 5px 20px rgba(0,0,0,0.05);
-        font-size: 16px; line-height: 24px; color: #555; background: white;
-        font-family: 'Helvetica Neue', 'Helvetica', Helvetica, Arial, sans-serif;
+    /* --- RESET & VARIABLES --- */
+    :root {
+        --primary: #2c3e50;
+        --secondary: #7f8c8d;
+        --accent: #3498db;
+        --border: #eaedf0;
+        --bg: #f4f6f8;
+        --success: #27ae60;
+        --warning: #f39c12;
     }
-    .invoice-header { display: flex; justify-content: space-between; margin-bottom: 50px; border-bottom: 2px solid #3498db; padding-bottom: 20px; }
-    .company-details h2 { margin: 0; color: #2c3e50; font-size: 28px; text-transform: uppercase; }
-    .invoice-meta { text-align: right; }
-    .invoice-meta h1 { margin: 0; font-size: 32px; color: #3498db; text-transform: uppercase; letter-spacing: 2px; }
     
-    .info-section { display: flex; justify-content: space-between; margin-bottom: 40px; }
-    .bill-to h3 { margin-top: 0; color: #34495e; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #eee; padding-bottom: 5px; margin-bottom: 10px; width: 100%; }
-    
-    /* --- UPDATED HIGH CONTRAST STAMPS --- */
-    .status-stamp {
-        display: inline-block;
-        padding: 8px 15px;
-        font-weight: 800;
-        text-transform: uppercase;
+    body {
+        background-color: var(--bg);
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        color: var(--primary);
+    }
+
+    /* --- LAYOUT CONTAINERS --- */
+    /* Keeps everything strictly aligned to the center at 900px */
+    .layout-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 0 20px; /* Prevents touching edges on small screens */
+    }
+
+    /* --- TOP ACTION BAR --- */
+    .action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 30px 0 20px 0;
+    }
+
+    .btn-back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--secondary);
+        font-weight: 600;
         font-size: 14px;
-        border-radius: 4px;
-        margin-top: 10px;
-        color: white; /* White Text */
+        transition: color 0.2s;
+    }
+    .btn-back:hover { color: var(--primary); }
+
+    .btn-print {
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);
+        transition: transform 0.1s;
+    }
+    .btn-print:hover { transform: translateY(-1px); background-color: #1a252f; }
+    .btn-print:active { transform: translateY(0); }
+
+    /* --- INVOICE PAPER --- */
+    .invoice-paper {
+        background: white;
+        padding: 60px;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        border: 1px solid var(--border);
+        margin-bottom: 50px;
+    }
+
+    /* --- HEADER GRID (Fixed Alignment) --- */
+    .header-grid {
+        display: grid;
+        grid-template-columns: 1fr auto; /* Left takes space, Right fits content */
+        gap: 20px;
+        border-bottom: 2px solid var(--border);
+        padding-bottom: 40px;
+        margin-bottom: 40px;
+        align-items: start;
+    }
+
+    .branding h1 {
+        margin: 0;
+        font-size: 26px;
+        text-transform: uppercase;
+        letter-spacing: -0.5px;
+        color: var(--primary);
+    }
+    .branding .sub {
+        margin-top: 5px;
+        color: var(--secondary);
+        font-size: 14px;
+    }
+
+    .meta-details {
+        text-align: right;
+        display: flex;
+        flex-direction: column;
+        gap: 15px; /* Spacing between Invoice # and Status */
+    }
+
+    .meta-group label {
+        display: block;
+        font-size: 11px;
+        text-transform: uppercase;
         letter-spacing: 1px;
+        color: var(--secondary);
+        margin-bottom: 4px;
     }
-    .st-Paid { background-color: #27ae60; border: 2px solid #27ae60; }
-    .st-Pending { background-color: #f39c12; border: 2px solid #f39c12; }
-    .st-Sent { background-color: #2980b9; border: 2px solid #2980b9; }
-    .st-Overdue { background-color: #c0392b; border: 2px solid #c0392b; }
-    .st-Draft { background-color: #7f8c8d; border: 2px solid #7f8c8d; }
-
-    /* Tables */
-    .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-    .invoice-table th { background: #f8f9fa; color: #333; font-weight: bold; padding: 15px; text-align: left; border-bottom: 2px solid #ddd; }
-    .invoice-table td { padding: 15px; border-bottom: 1px solid #eee; }
-    
-    /* Specific row styling */
-    .invoice-table .item-row:hover { background-color: #f9f9f9; }
-    
-    /* Spacer Row */
-    .spacer-row td { border: none; padding: 20px 0; }
-
-    /* Extras Row (GST/Shipping) */
-    .extras-row td { 
-        padding: 10px 15px; 
-        border-bottom: 1px solid #eee; 
-        color: #7f8c8d;
+    .meta-group .value {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--primary);
     }
-    .extras-label { font-weight: bold; text-align: right; }
 
-    /* Total Row */
-    .invoice-table .total-row td { 
-        border-top: 2px solid #3498db; 
-        font-weight: bold; 
-        font-size: 18px; 
-        color: #2c3e50; 
-        padding-top: 20px;
+    /* --- BADGES --- */
+    .status-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 50px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
+    .status-badge.paid {
+        background: #e8f8f5;
+        color: var(--success);
+        border: 1px solid #d1f2eb;
+    }
+    .status-badge.unpaid {
+        background: #fef5e7;
+        color: var(--warning);
+        border: 1px solid #fad7a0;
+    }
+
+    /* --- ADDRESS SECTION --- */
+    .address-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 50px;
+    }
+    .address-col h3 {
+        font-size: 12px;
+        text-transform: uppercase;
+        color: var(--secondary);
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+        width: 150px;
+    }
+    .address-col p {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #444;
+    }
+
+    /* --- TABLE --- */
+    .table-responsive { width: 100%; margin-bottom: 30px; }
+    table { width: 100%; border-collapse: collapse; }
     
-    .invoice-footer { text-align: center; margin-top: 50px; font-size: 12px; color: #aaa; border-top: 1px solid #eee; padding-top: 20px; }
+    th {
+        text-align: left;
+        padding: 12px 0;
+        border-bottom: 2px solid var(--border);
+        color: var(--secondary);
+        font-size: 11px;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    td {
+        padding: 16px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 14px;
+    }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    /* --- TOTALS --- */
+    .totals-container {
+        display: flex;
+        justify-content: flex-end;
+    }
+    .totals-box { width: 300px; }
     
-    .actions-bar { max-width: 800px; margin: 20px auto 50px; text-align: right; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
-    .btn-print { background-color: #27ae60; color: white; }
-    .btn-print:hover { background-color: #219150; }
-    
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
-    .modal-content { background-color: white; padding: 30px; border-radius: 12px; width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); animation: fadeIn 0.2s ease-out; }
-    .modal-icon { font-size: 50px; color: #e74c3c; margin-bottom: 15px; }
-    .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 25px; }
-    .btn-cancel { background-color: #95a5a6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-    .btn-confirm-delete { background-color: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
-    
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .total-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        font-size: 14px;
+        color: var(--secondary);
+    }
+    .total-row.grand {
+        border-top: 2px solid var(--primary);
+        margin-top: 10px;
+        padding-top: 15px;
+        color: var(--primary);
+        font-weight: 800;
+        font-size: 20px;
+    }
+
+    /* --- FOOTER --- */
+    .invoice-footer {
+        margin-top: 60px;
+        padding-top: 30px;
+        border-top: 1px solid var(--border);
+        text-align: center;
+        color: #95a5a6;
+        font-size: 13px;
+    }
+
+    /* --- PRINT HIDING --- */
     @media print {
-        @page { margin: 0; }
-        body { background: white; -webkit-print-color-adjust: exact; }
-        .sidebar, .header, .actions-bar, .no-print, .alert { display: none !important; }
-        .main-content { margin: 0; padding: 0; width: 100%; height: 100%; }
-        .invoice-box { box-shadow: none; border: none; padding: 40px; margin: 0; width: 100%; max-width: 100%; }
-        .status-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .no-print, header, .sidebar { display: none !important; }
+        .invoice-paper { box-shadow: none; border: none; margin: 0; padding: 0; }
+        .layout-container { max-width: 100%; padding: 0; }
+        body { background: white; }
     }
 </style>
 
-<div class="invoice-box">
-    <div class="invoice-header">
-        <div class="company-details">
-            <h2>WDP Fashion</h2>
-            <p style="font-size: 14px; margin-top: 5px;">
-                123 Fashion Avenue<br>
-                Singapore, 560456<br>
-                admin@wdpfashion.com
-            </p>
-        </div>
-        <div class="invoice-meta">
-            <h1>INVOICE</h1>
-            <p><strong>#{{ invoice.invoice_code }}</strong></p>
-            <p>Date: {{ invoice.date_created.strftime('%b %d, %Y') }}</p>
-            <p>Due: {{ invoice.date_due.strftime('%b %d, %Y') }}</p>
+<div class="layout-container">
+
+    <div class="action-bar no-print">
+        {% if is_customer_view %}
+            <a href="{{ url_for('store_profile') }}" class="btn-back">
+                <i class="fa-solid fa-arrow-left"></i> Back to Orders
+            </a>
+        {% else %}
+            <a href="{{ url_for('invoices') }}" class="btn-back">
+                <i class="fa-solid fa-arrow-left"></i> Back to Admin
+            </a>
+        {% endif %}
+        
+        <button onclick="window.print()" class="btn-print">
+            <i class="fa-solid fa-download"></i> Download PDF
+        </button>
+    </div>
+
+    <div class="invoice-paper">
+        
+        <div class="header-grid">
+            <div class="branding">
+                <h1>Shop.co</h1>
+                <div class="sub">Official Invoice</div>
+            </div>
             
-            <div class="status-stamp st-{{ invoice.status }}">
-                {{ invoice.status }}
+            <div class="meta-details">
+                <div class="meta-group">
+                    <label>Invoice Number</label>
+                    <div class="value">#{{ invoice.invoice_code }}</div>
+                </div>
+                <div class="meta-group">
+                    <label>Payment Status</label>
+                    <div class="value">
+                        {% if invoice.status == 'Paid' %}
+                            <span class="status-badge paid">Paid</span>
+                        {% else %}
+                            <span class="status-badge unpaid">Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="info-section">
-        <div class="bill-to" style="width: 45%;">
-            <h3>Bill To:</h3>
-            <strong>{{ invoice.client.company }}</strong><br>
-            Attn: {{ invoice.client.name }}<br>
-            {{ invoice.client.email }}
+        <div class="address-row">
+            <div class="address-col">
+                <h3>From</h3>
+                <p>
+                    <strong>Shop.co Inc.</strong><br>
+                    123 Fashion Street<br>
+                    Singapore, 560123
+                </p>
+            </div>
+            <div class="address-col" style="text-align: right;">
+                <h3>Bill To</h3>
+                <p>
+                    <strong>{{ invoice.client.name }}</strong><br>
+                    {{ invoice.client.email }}<br>
+                    Client ID: {{ invoice.client.custom_id }}
+                </p>
+            </div>
         </div>
-        <div class="bill-to" style="width: 45%;">
-            <h3>Order Reference:</h3>
-            <strong>Order #{{ invoice.order.order_code }}</strong><br>
-            {{ invoice.order.description }}
+
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50%;">Description</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-right">Unit Price</th>
+                        <th class="text-right">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if invoice.order %}
+                        {% for item in invoice.order.items %}
+                        <tr>
+                            <td>
+                                <strong>{{ item.item_name }}</strong>
+                                {% if item.variant %}<br><span style="color: #999; font-size: 12px;">{{ item.variant }}</span>{% endif %}
+                            </td>
+                            <td class="text-center">{{ item.quantity }}</td>
+                            <td class="text-right">${{ "%.2f"|format(item.unit_price) }}</td>
+                            <td class="text-right">${{ "%.2f"|format(item.total_price) }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center" style="color: #999;">Manual Invoice (No items)</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
-    </div>
 
-    <table class="invoice-table">
-        <thead>
-            <tr>
-                <th style="width: 50%;">Description</th>
-                <th style="width: 10%; text-align: center;">Qty</th>
-                <th style="width: 20%; text-align: right;">Unit Price</th>
-                <th style="width: 20%; text-align: right;">Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if invoice.order.items %}
-                
-                {# 1. Loop for Standard Items (Exclude GST and Shipping) #}
-                {% for item in invoice.order.items %}
-                    {% if 'Shipping' not in item.item_name and 'GST' not in item.item_name %}
-                    <tr class="item-row">
-                        <td>
-                            <strong>{{ item.item_name }}</strong>
-                        </td>
-                        <td style="text-align: center;">{{ item.quantity }}</td>
-                        <td style="text-align: right;">${{ "%.2f"|format(item.unit_price) }}</td>
-                        <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
-                    </tr>
-                    {% endif %}
-                {% endfor %}
+        <div class="totals-container">
+            <div class="totals-box">
+                <div class="total-row">
+                    <span>Issue Date</span>
+                    <span>{{ invoice.date_created.strftime('%b %d, %Y') }}</span>
+                </div>
+                <div class="total-row">
+                    <span>Due Date</span>
+                    <span>{{ invoice.date_due.strftime('%b %d, %Y') if invoice.date_due else 'N/A' }}</span>
+                </div>
+                <div class="total-row grand">
+                    <span>Total Due</span>
+                    <span>${{ "%.2f"|format(invoice.amount) }}</span>
+                </div>
+            </div>
+        </div>
 
-                {# 2. Spacer Row #}
-                <tr class="spacer-row"><td colspan="4"></td></tr>
-
-                {# 3. Loop for Extras (Shipping and GST Only) #}
-                {% for item in invoice.order.items %}
-                    {% if 'Shipping' in item.item_name or 'GST' in item.item_name %}
-                    <tr class="extras-row">
-                        <td colspan="3" class="extras-label">{{ item.item_name }}:</td>
-                        <td style="text-align: right;">${{ "%.2f"|format(item.total_price) }}</td>
-                    </tr>
-                    {% endif %}
-                {% endfor %}
-
-            {% else %}
-                <tr class="item-row">
-                    <td colspan="3">
-                        <strong>{{ invoice.order.description }}</strong><br>
-                        <span style="font-size: 13px; color: #7f8c8d;">Services/Products rendered as per order agreement.</span>
-                    </td>
-                    <td style="text-align: right;">${{ "%.2f"|format(invoice.amount) }}</td>
-                </tr>
-            {% endif %}
-
-            <tr class="total-row">
-                <td colspan="3" style="text-align: right; border:none;">Total Amount:</td>
-                <td style="text-align: right;">${{ "%.2f"|format(invoice.amount) }}</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <div class="invoice-footer">
-        <p>Thank you for your business!</p>
-        <p>Payment is due within 30 days. Please include the invoice number in your payment reference.</p>
-    </div>
-</div>
-
-<div class="actions-bar no-print">
-    <a href="{{ url_for('invoices') }}" class="btn btn-secondary" style="margin-right: auto;">
-        <i class="fa-solid fa-arrow-left"></i> Back
-    </a>
-    
-    {% if g.user.role == 'SuperAdmin' %}
-        <a href="{{ url_for('edit_invoice', invoice_id=invoice.id) }}" class="btn btn-primary">
-            <i class="fa-solid fa-pen-to-square"></i> Edit
-        </a>
-        <button onclick="printInvoice()" class="btn btn-print">
-            <i class="fa-solid fa-print"></i> Print / PDF
-        </button>
-        <form id="deleteForm" action="{{ url_for('delete_invoice', invoice_id=invoice.id) }}" method="POST" style="display: inline;">
-            <button type="button" class="btn btn-danger" onclick="showDeleteModal()">
-                <i class="fa-solid fa-trash"></i> Delete
-            </button>
-        </form>
-    {% else %}
-        <button onclick="printInvoice()" class="btn btn-print">
-            <i class="fa-solid fa-print"></i> Print / PDF
-        </button>
-    {% endif %}
-</div>
-
-<div id="deleteModal" class="modal-overlay">
-    <div class="modal-content">
-        <div class="modal-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-        <h3>Delete Invoice?</h3>
-        <p>Are you sure you want to delete <strong>{{ invoice.invoice_code }}</strong>?</p>
-        <div class="modal-actions">
-            <button class="btn-cancel" onclick="hideDeleteModal()">Cancel</button>
-            <button class="btn-confirm-delete" onclick="confirmDelete()">Yes, Delete</button>
+        <div class="invoice-footer">
+            Thank you for your business. Please contact support@shop.co for any inquiries.
         </div>
     </div>
 </div>
 
 <script>
-    function printInvoice() {
-        const originalTitle = document.title;
-        document.title = "{{ invoice.invoice_code }}"; // Set filename for download
-
-        // Log the download action
-        fetch("{{ url_for('log_invoice_download', invoice_id=invoice.id) }}", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        }).catch(err => console.error("Logging failed", err));
-
-        window.print();
-
-        setTimeout(() => { document.title = originalTitle; }, 1000);
-    }
-
-    function showDeleteModal() { document.getElementById('deleteModal').style.display = 'flex'; }
-    function hideDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
-    function confirmDelete() { document.getElementById('deleteForm').submit(); }
-    window.onclick = function(e) { if(e.target == document.getElementById('deleteModal')) hideDeleteModal(); }
+    // Log Download
+    window.onbeforeprint = function() {
+        fetch("{{ url_for('log_invoice_download', invoice_id=invoice.id) }}", { method: 'POST' });
+    };
 </script>
-
 {% endblock %}

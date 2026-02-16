@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
+        /* [KEEP ALL YOUR EXISTING CSS EXACTLY AS IS] */
         :root { --font-main: 'Inter', sans-serif; --bg-body: #ffffff; --text-primary: #111; --text-secondary: #71717a; --border: #e4e4e7; --nav-height: 64px; --transition: all 0.2s ease-in-out; }
         body { font-family: var(--font-main); background: var(--bg-body); color: var(--text-primary); margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 100vh; }
         a { text-decoration: none; color: inherit; transition: var(--transition); }
@@ -40,6 +41,15 @@
         .newsletter-input { width: 100%; padding: 12px; border: 1px solid #e5e5e5; background: #f9f9f9; }
         .subscribe-btn { width: 100%; background: #000; color: white; border: none; padding: 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-top: 10px; cursor: pointer; }
         @media (max-width: 900px) { .store-nav { padding: 0 20px; } .nav-center, .search-wrapper { display: none; } .footer-grid { grid-template-columns: 1fr 1fr; } }
+
+        /* --- NEW ADDITION FOR NAV PROFILE PIC --- */
+        .nav-user-img {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 1px solid #e5e5e5;
+        }
     </style>
 </head>
 <body>
@@ -64,14 +74,20 @@
             </form>
         </div>
         <div class="nav-links">
+            
             {% if g.user %}
                 <a href="{{ url_for('store_profile') }}" class="nav-item user-profile">
-                    <i class="fa-regular fa-user"></i> 
+                    {% if g.user.profile_image %}
+                        <img src="{{ url_for('static', filename='profile_pics/' + g.user.profile_image) }}" class="nav-user-img" alt="User">
+                    {% else %}
+                        <i class="fa-regular fa-user"></i> 
+                    {% endif %}
                     {{ g.user.first_name if g.user.first_name else 'Account' }}
                 </a>
             {% else %}
                 <a href="{{ url_for('store_auth') }}" class="nav-icon"><i class="fa-regular fa-user"></i></a>
             {% endif %}
+            
             <a href="{{ url_for('store_cart') }}" class="nav-icon">
                 <i class="fa-solid fa-bag-shopping"></i>
                 {% if cart_count > 0 %}<span class="badge">{{ cart_count }}</span>{% endif %}
@@ -90,8 +106,10 @@
         {% endfor %}
       {% endif %}
     {% endwith %}
-</div>
+    </div>
+
     {% block content %}{% endblock %}
+    
     <footer>
         <div class="container">
             <div class="footer-grid">

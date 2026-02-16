@@ -452,6 +452,35 @@ def seed_products():
         db.session.add_all(products)
         db.session.commit()
         print("Products Added!")
+
+# app.py - Add to Section 5
+
+def check_incomplete_signup():
+    """Checks if the logged-in user has completed their account setup."""
+    if not g.user:
+        return None # Not logged in, let other checks handle it
+        
+    # 1. Check if Email is Verified
+    if not g.user.is_verified:
+        # If they are logged in but not verified, send them to verify page
+        # We need to set the session variable so verify page knows who they are
+        session['pending_user_id'] = g.user.id
+        session['auth_email'] = g.user.email
+        flash("Please verify your email address to continue.", "warning")
+        return redirect(url_for('store_verify'))
+
+    # 2. Check if Social Login Setup is Complete (Password Placeholder)
+    placeholders = [
+        "GOOGLE_OAUTH_USER", "DISCORD_OAUTH_USER", 
+        "FACEBOOK_OAUTH_USER", "MICROSOFT_OAUTH_USER", 
+        "GITHUB_OAUTH_USER"
+    ]
+    
+    if g.user.password in placeholders:
+        flash("Please complete your account setup to continue.", "warning")
+        return redirect(url_for('store_setup_password'))
+        
+    return None
 # ==============================================================================
 # SECTION 6: ROUTES (STORE & AUTH)
 # ==============================================================================
@@ -592,8 +621,24 @@ def store_signup_details():
             return redirect(url_for('store_auth'))
 
         try:
-            count = User.query.count() + 1
-            custom_id = f"CUST-{datetime.now().year}-{count:03d}"
+            # --- FIX: ROBUST ID GENERATION START ---
+            # Instead of counting, we look for the LAST used ID and add 1
+            last_cust = User.query.filter(User.custom_id.like('CUST-%')).order_by(User.id.desc()).first()
+
+            if last_cust and last_cust.custom_id:
+                try:
+                    # Extract the last number (e.g. from 'CUST-2026-005' get '005')
+                    last_num = int(last_cust.custom_id.split('-')[-1])
+                    new_num = last_num + 1
+                except ValueError:
+                    # Fallback if format is weird
+                    new_num = User.query.count() + 1
+            else:
+                # First customer ever
+                new_num = 1
+
+            custom_id = f"CUST-{datetime.now().year}-{new_num:03d}"
+            # --- FIX END ---
             
             # Hash Password for Professional Security
             hashed_pw = generate_password_hash(password)
@@ -620,6 +665,8 @@ def store_signup_details():
             
         except Exception as e:
             db.session.rollback()
+            # Added better logging so you can see what failed
+            print(f"Signup Error: {e}") 
             flash(f"System Error: {str(e)}", "danger")
             return render_template('store_signup.html', email=email, form_data=request.form)
             
@@ -925,6 +972,10 @@ def store_logout():
 @app.route('/store/profile')
 def store_profile():
     if not g.user: return redirect(url_for('store_auth'))
+    # --- ADD THIS CHECK ---
+    incomplete = check_incomplete_signup()
+    if incomplete: return incomplete
+    # ----------------------
     client = Client.query.filter_by(email=g.user.email).first()
     orders = []
     invoices = []
@@ -948,6 +999,53 @@ def update_profile():
             g.user.profile_image = filename
     db.session.commit()
     flash("Profile updated successfully.", "success")
+    return redirect(url_for('store_profile'))
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# --- NEW: Profile Picture Upload Route ---
+@app.route('/store/profile/upload_pic', methods=['POST'])
+def upload_profile_pic():
+    # 1. Security Check
+    if not g.user:
+        return redirect(url_for('store_auth'))
+        
+    # 2. Check if file is present
+    if 'profile_pic' not in request.files:
+        flash('No file selected.', 'danger')
+        return redirect(url_for('store_profile'))
+    
+    file = request.files['profile_pic']
+    
+    # 3. Check if filename is empty
+    if file.filename == '':
+        flash('No file selected.', 'danger')
+        return redirect(url_for('store_profile'))
+        
+    # 4. Validate and Save
+    if file and allowed_file(file.filename):
+        try:
+            # Create a safe, unique filename (e.g., user_5_20231024.jpg) to prevent overwrites
+            file_ext = file.filename.rsplit('.', 1)[1].lower()
+            new_filename = f"user_{g.user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.{file_ext}"
+            
+            # Save the file
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], new_filename))
+            
+            # Update Database
+            g.user.profile_image = new_filename
+            db.session.commit()
+            
+            flash('Profile picture updated successfully!', 'success')
+            
+        except Exception as e:
+            flash(f'Error saving image: {str(e)}', 'danger')
+            
+    else:
+        flash('Invalid file type. Allowed: PNG, JPG, JPEG', 'warning')
+        
     return redirect(url_for('store_profile'))
 
 @app.route('/store/profile/security', methods=['POST'])
@@ -1167,6 +1265,10 @@ def store_checkout():
     if not g.user:
         flash("Please sign in to checkout.", "warning")
         return redirect(url_for('store_auth')) 
+    # --- ADD THIS CHECK ---
+    incomplete = check_incomplete_signup()
+    if incomplete: return incomplete
+    # ----------------------
     if not session.get('cart'): return redirect(url_for('store_shop'))
     
     totals = calculate_cart_totals(session['cart'])
@@ -1390,20 +1492,24 @@ def create_invoice(order_id):
 
 @app.route('/invoice/view/<int:invoice_id>')
 def view_invoice(invoice_id):
-    # Allow both Admins and the Customer who owns the invoice to view it
     if not g.user: return redirect(url_for('login'))
     
     invoice = Invoice.query.get_or_404(invoice_id)
     
-    # Permission Check
+    # 1. Customer Logic: Strict Ownership Check & Customer Layout
     if g.user.role == 'Customer':
-        # Check if this invoice belongs to the logged-in user's client profile
         client = Client.query.filter_by(email=g.user.email).first()
+        
+        # Security: If invoice doesn't belong to this client, kick them out
         if not client or invoice.client_id != client.id:
-            flash("Access Denied.", "danger")
+            flash("Access Denied: You can only view your own invoices.", "danger")
             return redirect(url_for('store_home'))
             
-    return render_template('view_invoice.html', invoice=invoice)
+        # Render with CUSTOMER layout (No Admin Panel)
+        return render_template('view_invoice.html', invoice=invoice, is_customer_view=True)
+            
+    # 2. Admin Logic: Admin Layout
+    return render_template('view_invoice.html', invoice=invoice, is_customer_view=False)
 
 @app.route('/invoice/edit/<int:invoice_id>', methods=['GET', 'POST'])
 @admin_required
