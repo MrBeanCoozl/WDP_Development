@@ -368,6 +368,18 @@ class Product(db.Model):
     sales_count = db.Column(db.Integer, default=0)
     sizes = db.Column(db.String(200))
 
+class Review(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    rating = db.Column(db.Integer, nullable=False) # 1-5
+    comment = db.Column(db.Text)
+    date_posted = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = db.relationship('User', backref='reviews')
+    order = db.relationship('Order', backref=db.backref('review', uselist=False))
+
 # ==============================================================================
 # SECTION 5: HELPER FUNCTIONS
 # ==============================================================================
@@ -936,6 +948,76 @@ def store_setup_password():
                 
     return render_template('store_setup_password.html')
 
+@app.route('/store/invoice/pay/<int:invoice_id>')
+def store_invoice_pay(invoice_id):
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    # 1. Get Invoice & Verify Ownership
+    invoice = Invoice.query.get(invoice_id)
+    if not invoice:
+        flash("Invoice not found.", "danger")
+        return redirect(url_for('store_profile'))
+    
+    client = Client.query.get(invoice.client_id)
+    if not client or client.email != g.user.email:
+        flash("Access Denied.", "danger")
+        return redirect(url_for('store_home'))
+        
+    if invoice.status != 'Pending':
+        flash(f"This invoice is already {invoice.status}.", "warning")
+        return redirect(url_for('store_profile'))
+
+    # 2. Setup Session for Confirmation Page
+    session['confirm_order_id'] = invoice.order_id
+    
+    # Try to reconstruct shipping info from description (Simple extraction)
+    # Format was: "PaymentDesc | Ship to: Address"
+    desc = invoice.order.description
+    address_part = "Address on file"
+    if "Ship to:" in desc:
+        address_part = desc.split("Ship to:")[1].strip()
+        
+    session['confirm_shipping'] = {
+        'first_name': g.user.first_name,
+        'last_name': g.user.last_name,
+        'address': address_part,
+        'city': '',
+        'zip': ''
+    }
+    
+    return redirect(url_for('store_checkout_confirm'))
+
+@app.route('/store/invoice/cancel/<int:invoice_id>')
+def store_invoice_cancel(invoice_id):
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    invoice = Invoice.query.get(invoice_id)
+    if not invoice: return redirect(url_for('store_profile'))
+    
+    client = Client.query.get(invoice.client_id)
+    if not client or client.email != g.user.email:
+        return redirect(url_for('store_home'))
+        
+    if invoice.status == 'Pending':
+        # 1. Update Status
+        invoice.status = 'Cancelled'
+        if invoice.order:
+            invoice.order.status = 'Cancelled'
+            
+            # 2. RESTOCK ITEMS
+            for item in invoice.order.items:
+                # Find product by name
+                prod = Product.query.filter_by(name=item.item_name).first()
+                if prod:
+                    prod.stock += item.quantity
+                    prod.sales_count -= item.quantity
+        
+        db.session.commit()
+        log_action('Customer', g.user.username, 'Cancel Invoice', 'Invoice', invoice.invoice_code, 'Success', 'User cancelled pending order')
+        flash("Invoice cancelled and items returned to stock.", "success")
+        
+    return redirect(url_for('store_profile'))
+
 @app.route('/store/profile/delete', methods=['POST'])
 def delete_account():
     if not g.user: return redirect(url_for('store_auth'))
@@ -972,16 +1054,22 @@ def store_logout():
 @app.route('/store/profile')
 def store_profile():
     if not g.user: return redirect(url_for('store_auth'))
-    # --- ADD THIS CHECK ---
+    
+    # 1. Check for incomplete signup
     incomplete = check_incomplete_signup()
     if incomplete: return incomplete
-    # ----------------------
+    
+    # 2. RUN EXPIRY CHECK
+    check_invoice_expiry()
+    
+    # 3. Load Data
     client = Client.query.filter_by(email=g.user.email).first()
     orders = []
     invoices = []
     if client:
         orders = Order.query.filter_by(client_id=client.id).order_by(Order.date_placed.desc()).all()
         invoices = Invoice.query.filter_by(client_id=client.id).order_by(Invoice.date_created.desc()).all()
+        
     payment_methods = g.user.payment_methods
     return render_template('store_profile.html', user=g.user, orders=orders, invoices=invoices, payment_methods=payment_methods)
 
@@ -1153,9 +1241,13 @@ def verify_email_change():
         session['show_email_verify'] = True
     return redirect(url_for('store_profile'))
 
+
 @app.route('/store/profile/payment', methods=['POST'])
 def update_payment():
-    if not g.user: return redirect(url_for('store_auth'))
+    if not g.user: 
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+             return jsonify({'status': 'error', 'message': 'Login required'}), 401
+        return redirect(url_for('store_auth'))
     
     cardholder = request.form.get('cardholder_name')
     card_number = request.form.get('card_number', '').replace(' ', '')
@@ -1179,19 +1271,43 @@ def update_payment():
         )
         db.session.add(new_card)
         db.session.commit()
+        
+        # --- NEW: AJAX Response ---
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'status': 'success',
+                'message': 'Card added successfully',
+                'card': {
+                    'id': new_card.id,
+                    'card_type': new_card.card_type,
+                    'last4': new_card.last4,
+                    'expiry': new_card.expiry,
+                    'cardholder_name': new_card.cardholder_name
+                }
+            })
+
         flash(f"{card_type} ending in {last4} added.", "success")
     else:
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+             return jsonify({'status': 'error', 'message': 'Invalid card details'}), 400
         flash("Invalid card details.", "danger")
     return redirect(url_for('store_profile'))
 
-@app.route('/store/profile/delete_payment/<int:pm_id>')
+@app.route('/store/profile/delete_payment/<int:pm_id>', methods=['GET', 'POST', 'DELETE'])
 def delete_payment(pm_id):
     if not g.user: return redirect(url_for('store_auth'))
     pm = PaymentMethod.query.get(pm_id)
+    
     if pm and pm.user_id == g.user.id:
         db.session.delete(pm)
         db.session.commit()
+        
+        # --- NEW: AJAX Response ---
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+             return jsonify({'status': 'success', 'message': 'Card removed'})
+             
         flash("Payment method removed.", "success")
+        
     return redirect(url_for('store_profile'))
 
 # --- CART & CHECKOUT ---
@@ -1260,104 +1376,267 @@ def update_cart():
     session.modified = True
     return redirect(url_for('store_cart'))
 
+# ==============================================================================
+# CHECKOUT FLOW: CREATE PENDING -> CONFIRM -> PAID
+# ==============================================================================
+
 @app.route('/checkout', methods=['GET', 'POST'])
 def store_checkout():
     if not g.user:
         flash("Please sign in to checkout.", "warning")
         return redirect(url_for('store_auth')) 
-    # --- ADD THIS CHECK ---
-    incomplete = check_incomplete_signup()
-    if incomplete: return incomplete
-    # ----------------------
+        
+    if not g.user.is_verified:
+        session['pending_user_id'] = g.user.id
+        session['auth_email'] = g.user.email
+        flash("Please verify your email address to continue.", "warning")
+        return redirect(url_for('store_verify'))
+        
     if not session.get('cart'): return redirect(url_for('store_shop'))
     
     totals = calculate_cart_totals(session['cart'])
     
     if request.method == 'POST':
         try:
-            # 1. Determine Payment Method
-            payment_type = request.form.get('payment_type') # 'card', 'paypal', 'google', 'apple'
-            
-            # 2. Logic for different payments
-            payment_details_log = f"Paid via {payment_type}"
+            # 1. Capture Payment Selection
+            payment_type = request.form.get('payment_type')
+            payment_desc = "Unknown"
             
             if payment_type == 'card':
-                card_choice = request.form.get('card_choice') # 'saved' or 'new'
-                
+                card_choice = request.form.get('card_choice')
                 if card_choice == 'saved':
                     pm_id = request.form.get('saved_pm_id')
                     pm = PaymentMethod.query.get(pm_id)
                     if pm and pm.user_id == g.user.id:
-                        payment_details_log = f"Paid via Saved {pm.card_type} (**{pm.last4})"
-                    else:
-                        raise Exception("Invalid saved card selected.")
-                
+                        payment_desc = f"Saved {pm.card_type} (**{pm.last4})"
+                    else: raise Exception("Invalid saved card.")
                 elif card_choice == 'new':
-                    # Validate New Card Inputs (Basic Check)
                     c_num = request.form.get('card_number', '').replace(' ', '')
-                    c_name = request.form.get('card_name')
                     if len(c_num) < 13: raise Exception("Invalid Card Number")
-                    if not c_name: raise Exception("Cardholder Name Required")
-                    
-                    # Optional: Save this card if checkbox checked? (Not implemented for checkout flow to keep it simple)
                     brand = "Visa"
-                    if c_num.startswith('34') or c_num.startswith('37'): brand = "Amex"
-                    elif c_num.startswith('5'): brand = "Mastercard"
-                    payment_details_log = f"Paid via New {brand} (**{c_num[-4:]})"
-            
-            # 3. Create Order & Invoice (Standard Flow)
-            name = request.form.get('name', f"{g.user.first_name} {g.user.last_name}")
-            address = request.form['address']
-            
+                    if c_num.startswith('5'): brand = "Mastercard"
+                    payment_desc = f"New {brand} (**{c_num[-4:]})"
+            else:
+                payment_desc = f"{payment_type.title()}"
+
+            # 2. Capture Shipping (For Confirm Page Display Only - DB schema lacks address)
+            shipping_info = {
+                'first_name': request.form.get('first_name'),
+                'last_name': request.form.get('last_name'),
+                'address': request.form.get('address'),
+                'city': request.form.get('city'),
+                'zip': request.form.get('zip')
+            }
+
+            # 3. CREATE RECORDS IMMEDIATELY (Status: Pending)
+            # Find/Create Client
             client = Client.query.filter_by(email=g.user.email).first()
             if not client:
-                client = Client(name=name, email=g.user.email, company="Online Customer")
+                client = Client(name=f"{g.user.first_name} {g.user.last_name}", email=g.user.email, company="Online Customer")
                 db.session.add(client)
-                db.session.commit()
+                db.session.commit() # Commit to get ID
+
+            # Create Order
+            order_code = f"ORD-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
+            # We append address to description since we don't have an address table
+            full_desc = f"{payment_desc} | Ship to: {shipping_info['address']}"
             
-            order_code = f"ORD-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
             new_order = Order(
-                order_code=order_code, client_id=client.id,
-                description=f"Online Order - {payment_details_log}",
-                amount=totals['grand_total'], status='Invoiced', date_placed=datetime.utcnow()
+                order_code=order_code, 
+                client_id=client.id,
+                description=full_desc[:200], # Truncate if too long
+                amount=totals['grand_total'], 
+                status='Pending', # <--- Initially Pending
+                date_placed=datetime.utcnow()
             )
             db.session.add(new_order)
             db.session.flush()
-            
+
+            # Create Order Items & Deduct Stock
             for p_id, item in session['cart'].items():
                 order_item = OrderItem(order_id=new_order.id, item_name=item['name'], quantity=item['qty'], unit_price=item['price'], total_price=item['price']*item['qty'])
                 db.session.add(order_item)
                 
-                # Stock Deduct
+                # DEDUCT STOCK NOW
                 prod = Product.query.get(int(p_id))
                 if prod:
                     prod.stock -= item['qty']
                     prod.sales_count += item['qty']
             
-            if totals['shipping'] > 0: db.session.add(OrderItem(order_id=new_order.id, item_name="Shipping Fee", quantity=1, unit_price=totals['shipping'], total_price=totals['shipping']))
-            if totals['gst'] > 0: db.session.add(OrderItem(order_id=new_order.id, item_name="GST (9%)", quantity=1, unit_price=totals['gst'], total_price=totals['gst']))
-            
-            inv_code = f"INV-WEB-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
-            new_invoice = Invoice(invoice_code=inv_code, order_id=new_order.id, client_id=client.id, amount=totals['grand_total'], status='Paid', date_created=datetime.utcnow(), date_due=datetime.utcnow())
+            # Add Fees
+            if totals['shipping'] > 0: 
+                db.session.add(OrderItem(order_id=new_order.id, item_name="Shipping Fee", quantity=1, unit_price=totals['shipping'], total_price=totals['shipping']))
+            if totals['gst'] > 0: 
+                db.session.add(OrderItem(order_id=new_order.id, item_name="GST (9%)", quantity=1, unit_price=totals['gst'], total_price=totals['gst']))
+
+            # Create Invoice (Pending)
+            inv_code = f"INV-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
+            new_invoice = Invoice(
+                invoice_code=inv_code, 
+                order_id=new_order.id, 
+                client_id=client.id, 
+                amount=totals['grand_total'], 
+                status='Pending', # <--- Pending
+                date_created=datetime.utcnow(), 
+                date_due=datetime.utcnow() + timedelta(days=7) # Due in 7 days
+            )
             db.session.add(new_invoice)
             db.session.commit()
             
-            session.pop('cart', None)
-            log_action('Customer', g.user.username, 'Online Purchase', 'Order', order_code, 'Success', payment_details_log)
-            flash(f"Order placed successfully! Ref: {order_code}", "success")
-            return redirect(url_for('store_home'))
+            # 4. Save to Session for Confirmation Step
+            session['confirm_order_id'] = new_order.id
+            session['confirm_shipping'] = shipping_info
+            
+            return redirect(url_for('store_checkout_confirm'))
             
         except Exception as e:
             db.session.rollback()
-            flash(f"Payment Error: {str(e)}", "danger")
+            flash(f"Error: {str(e)}", "danger")
             return redirect(url_for('store_checkout'))
-            
+
     return render_template('store_checkout.html', totals=totals, user=g.user, saved_methods=g.user.payment_methods)
+
+@app.route('/checkout/confirm')
+def store_checkout_confirm():
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    # Fetch the Pending Order from DB
+    order_id = session.get('confirm_order_id')
+    if not order_id: return redirect(url_for('store_checkout'))
+    
+    order = Order.query.get(order_id)
+    if not order: return redirect(url_for('store_checkout'))
+    
+    # Security: Ensure this order belongs to current user
+    client = Client.query.get(order.client_id)
+    if client.email != g.user.email: return redirect(url_for('store_home'))
+
+    # Load shipping info from session (since DB doesn't have it)
+    shipping_info = session.get('confirm_shipping', {})
+    
+    return render_template('store_checkout_confirm.html', order=order, shipping_info=shipping_info)
+
+@app.route('/checkout/process', methods=['POST'])
+def store_checkout_process():
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    order_id = session.get('confirm_order_id')
+    if not order_id: return redirect(url_for('store_checkout'))
+    
+    try:
+        order = Order.query.get(order_id)
+        if order and order.status == 'Pending':
+            # MARK AS PAID
+            order.status = 'Invoiced'
+            if order.invoice:
+                order.invoice.status = 'Paid'
+            
+            db.session.commit()
+            
+            # Log
+            log_action('Customer', g.user.username, 'Online Purchase', 'Order', order.order_code, 'Success', "Payment Completed")
+            
+            # Cleanup Session
+            session.pop('cart', None)
+            session.pop('confirm_order_id', None)
+            session.pop('confirm_shipping', None)
+            
+            return redirect(url_for('store_checkout_success', order_code=order.order_code))
+        else:
+            # Already paid or invalid
+            return redirect(url_for('store_home'))
+            
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Processing Error: {str(e)}", "danger")
+        return redirect(url_for('store_home'))
+
+@app.route('/checkout/cancel')
+def store_checkout_cancel():
+    # User clicked Cancel at confirmation
+    # The record REMAINS in DB as 'Pending'
+    session.pop('confirm_order_id', None)
+    session.pop('confirm_shipping', None)
+    session.pop('cart', None) # Clear cart since the order is technically created (just pending payment)
+    
+    flash("Order saved. You can complete payment or cancel this order in your Profile Invoice History.", "info")
+    return redirect(url_for('store_home'))
+
+@app.route('/checkout/success/<order_code>')
+def store_checkout_success(order_code):
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    # Optional: Fetch order if you want to display details (e.g. "Thanks, [Name]")
+    order = Order.query.filter_by(order_code=order_code).first()
+    
+    return render_template('store_checkout_success.html', order_code=order_code, order=order)
+
+@app.route('/review/<order_code>', methods=['GET', 'POST'])
+def store_review(order_code):
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    order = Order.query.filter_by(order_code=order_code).first()
+    if not order:
+        flash("Order not found.", "danger")
+        return redirect(url_for('store_home'))
+        
+    # Verify User Owns This Order
+    client = Client.query.get(order.client_id)
+    if not client or client.email != g.user.email:
+        flash("Access Denied.", "danger")
+        return redirect(url_for('store_home'))
+        
+    if request.method == 'POST':
+        rating = int(request.form.get('rating'))
+        comment = request.form.get('comment')
+        
+        # Update or Create Review
+        existing = Review.query.filter_by(order_id=order.id).first()
+        if existing:
+            existing.rating = rating
+            existing.comment = comment
+            flash("Review updated!", "success")
+        else:
+            review = Review(order_id=order.id, user_id=g.user.id, rating=rating, comment=comment)
+            db.session.add(review)
+            flash("Thank you for your review!", "success")
+        
+        db.session.commit()
+        return redirect(url_for('store_home'))
+        
+    return render_template('store_review.html', order=order)
 
 @app.route('/product/<int:product_id>')
 def store_product(product_id):
     product = Product.query.get_or_404(product_id)
     return render_template('store_product.html', product=product)
+
+def check_invoice_expiry():
+    """Checks for pending invoices older than 7 days and marks them expired."""
+    try:
+        # Calculate date 7 days ago
+        limit = datetime.utcnow() - timedelta(days=7)
+        
+        # Find pending invoices older than limit
+        expired_invoices = Invoice.query.filter(Invoice.status == 'Pending', Invoice.date_created < limit).all()
+        
+        if expired_invoices:
+            count = 0
+            for inv in expired_invoices:
+                inv.status = 'Expired'
+                # Attempt to restore stock (Match by Name since Product ID isn't in OrderItem)
+                if inv.order:
+                    for item in inv.order.items:
+                        prod = Product.query.filter_by(name=item.item_name).first()
+                        if prod:
+                            prod.stock += item.quantity
+                            prod.sales_count -= item.quantity
+                count += 1
+            
+            db.session.commit()
+            print(f"[SYSTEM] Expired {count} old pending invoices.")
+    except Exception as e:
+        print(f"[SYSTEM] Expiry Check Failed: {e}")
 
 # ==============================================================================
 # SECTION 7: ADMIN PANEL ROUTES (PRESERVED & FIXED LOGGING)

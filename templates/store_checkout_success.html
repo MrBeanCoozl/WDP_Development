@@ -1,0 +1,31 @@
+{% extends "store_base.html" %}
+{% block content %}
+<style>
+    .success-container { max-width: 600px; margin: 80px auto; text-align: center; padding: 0 20px; }
+    .success-icon { font-size: 60px; color: #166534; margin-bottom: 20px; }
+    .success-title { font-size: 32px; font-weight: 800; margin-bottom: 15px; }
+    .success-text { color: #666; font-size: 16px; margin-bottom: 30px; line-height: 1.5; }
+    .order-pill { background: #f3f4f6; padding: 5px 15px; border-radius: 20px; font-weight: 600; font-size: 14px; display: inline-block; margin-bottom: 40px; }
+    
+    .btn-review { display: inline-block; background: black; color: white; padding: 15px 40px; border-radius: 6px; text-decoration: none; font-weight: 700; text-transform: uppercase; transition: 0.2s; }
+    .btn-review:hover { opacity: 0.9; transform: translateY(-2px); }
+</style>
+
+<div class="success-container">
+    <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
+    <div class="success-title">Payment Successful!</div>
+    <div class="success-text">Thank you for your purchase. Your order is being processed and will be shipped soon.</div>
+    
+    <div class="order-pill">Order #{{ order_code }}</div>
+    
+    <div>
+        <a href="{{ url_for('store_review', order_code=order_code) }}" class="btn-review">
+            Leave a Review <i class="fa-solid fa-arrow-right" style="margin-left: 10px;"></i>
+        </a>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <a href="{{ url_for('store_home') }}" style="color: #666; font-size: 14px; text-decoration: underline;">Return to Home</a>
+    </div>
+</div>
+{% endblock %}
