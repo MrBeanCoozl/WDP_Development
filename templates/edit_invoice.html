@@ -83,27 +83,17 @@
             </div>
 
             <div class="form-group">
-                <label>Date Issued</label>
-                <input type="date" name="date_created" class="form-control" value="{{ invoice.date_created.strftime('%Y-%m-%d') }}" required>
-            </div>
-
-            <div class="form-group">
                 <label>Due Date</label>
                 <input type="date" name="date_due" class="form-control" value="{{ invoice.date_due.strftime('%Y-%m-%d') }}" required>
             </div>
 
             <div class="form-group">
-                <label>Total Amount ($)</label>
-                <input type="number" name="amount" class="form-control" step="0.01" value="{{ '%.2f'|format(invoice.amount) }}" required>
-            </div>
-
-            <div class="form-group">
                 <label>Payment Status</label>
                 <select name="status" class="form-control">
-                    <option value="Pending" {% if invoice.status == 'Pending' %}selected{% endif %}>Pending</option>
-                    <option value="Sent" {% if invoice.status == 'Sent' %}selected{% endif %}>Sent</option>
                     <option value="Paid" {% if invoice.status == 'Paid' %}selected{% endif %}>Paid</option>
-                    <option value="Overdue" {% if invoice.status == 'Overdue' %}selected{% endif %}>Overdue</option>
+                    <option value="Pending" {% if invoice.status == 'Pending' %}selected{% endif %}>Pending</option>
+                    <option value="Cancelled" {% if invoice.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                    <option value="Expired" {% if invoice.status == 'Expired' %}selected{% endif %}>Expired</option>
                 </select>
             </div>
 

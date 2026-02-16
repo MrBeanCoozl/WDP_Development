@@ -44,13 +44,9 @@
 <table class="order-table">
     <thead>
         <tr>
-            <th>Order ID</th>
-            <th>Client</th>
-            <th>Description</th>
-            <th>Date</th>
-            <th>Amount</th>
-            <th>Status</th>
-            <th class="col-actions">Actions</th>
+            <th>Order Ref</th>
+            <th>Customer Info</th>
+            <th>Items to Pack (Qty x Item)</th> <th>Shipment Status</th> <th class="col-actions">Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -61,26 +57,39 @@
                 <div style="font-weight: bold;">{{ order.client.name }}</div>
                 <div style="font-size: 12px; color: #b2bec3;">{{ order.client.company }}</div>
             </td>
-            <td>{{ order.description }}</td>
-            <td>{{ order.date_placed.strftime('%Y-%m-%d') }}</td>
-            <td style="font-weight: bold;">${{ "%.2f"|format(order.amount) }}</td>
-            <td><span class="status-badge status-{{ order.status }}">{{ order.status }}</span></td>
+            
+            <td>
+                <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #444;">
+                    {% for item in order.items %}
+                    <li><strong>{{ item.quantity }}x</strong> {{ item.item_name }}</li>
+                    {% endfor %}
+                </ul>
+            </td>
+
+            <td>
+                {% if order.status == 'Shipped' %}
+                    <span class="status-badge" style="background:#d1eaed; color:#2c3e50;">Shipped</span>
+                {% else %}
+                    <span class="status-badge" style="background:#d4edda; color:#155724;">Ready to Pack</span>
+                {% endif %}
+            </td>
+
             <td class="col-actions">
-                {% if order.status == 'Pending' %}
-                    {% if g.user.role != 'Staff' %}
-                        <a href="{{ url_for('create_invoice', order_id=order.id) }}" class="btn-action btn-gen">Generate Invoice</a>
-                    {% else %}
-                        <span style="font-size: 12px; color: #ccc;">Staff Read-Only</span>
-                    {% endif %}
-                {% elif order.invoice %}
-                    <a href="{{ url_for('view_invoice', invoice_id=order.invoice.id) }}" class="btn-action btn-view">View Invoice</a>
+                {% if order.status != 'Shipped' %}
+                    <form action="{{ url_for('mark_shipped', order_id=order.id) }}" method="POST">
+                        <button type="submit" class="btn-action" style="background: #2c3e50; color: white; border:none; cursor:pointer;">
+                            Mark Shipped
+                        </button>
+                    </form>
+                {% else %}
+                    <span style="color: green; font-size: 12px;"><i class="fa-solid fa-check"></i> Complete</span>
                 {% endif %}
             </td>
         </tr>
         {% else %}
         <tr>
-            <td colspan="7" style="text-align: center; padding: 30px; color: #999;">
-                No orders found matching your criteria.
+            <td colspan="5" style="text-align: center; padding: 30px; color: #999;">
+                No paid orders waiting for fulfillment.
             </td>
         </tr>
         {% endfor %}

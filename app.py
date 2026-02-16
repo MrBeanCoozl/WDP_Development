@@ -1719,16 +1719,53 @@ def update_targets():
 def orders():
     if not g.user or g.user.role == 'Customer': return redirect(url_for('login'))
     page = request.args.get('page', 1, type=int)
-    query = Order.query.order_by(Order.date_placed.desc())
+    
+    # --- REVAMP: ONLY SHOW PAID ORDERS ---
+    # We filter out 'Pending', 'Cancelled', and 'Expired'
+    # We assume 'Invoiced' or 'Paid' means it's ready to ship.
+    query = Order.query.filter(Order.status.in_(['Invoiced', 'Paid', 'Shipped', 'Delivered'])).order_by(Order.date_placed.desc())
+    
     orders_pagination = query.paginate(page=page, per_page=10, error_out=False)
     return render_template('orders.html', orders=orders_pagination)
+
+# [REPLACE THE EXISTING 'invoices' ROUTE IN app.py]
 
 @app.route('/invoices')
 def invoices():
     if not g.user or g.user.role == 'Customer': return redirect(url_for('login'))
+    
     page = request.args.get('page', 1, type=int)
-    query = Invoice.query.order_by(Invoice.date_created.desc())
+    search = request.args.get('search', '')
+    status_filter = request.args.get('status', 'All')
+    sort_by = request.args.get('sort', 'date_desc')
+    
+    query = Invoice.query
+    
+    # 1. Search Logic (Search by Invoice Code or Client Name)
+    if search:
+        query = query.join(Client).filter(
+            or_(
+                Invoice.invoice_code.ilike(f'%{search}%'),
+                Client.name.ilike(f'%{search}%')
+            )
+        )
+    
+    # 2. Filter Logic (Paid, Pending, Cancelled, Expired)
+    if status_filter != 'All':
+        query = query.filter(Invoice.status == status_filter)
+        
+    # 3. Sort Logic
+    if sort_by == 'date_asc':
+        query = query.order_by(Invoice.date_created.asc())
+    elif sort_by == 'amount_high':
+        query = query.order_by(Invoice.amount.desc())
+    elif sort_by == 'amount_low':
+        query = query.order_by(Invoice.amount.asc())
+    else: # date_desc (Default)
+        query = query.order_by(Invoice.date_created.desc())
+        
     invoices_pagination = query.paginate(page=page, per_page=10, error_out=False)
+    
     return render_template('invoices.html', invoices=invoices_pagination)
 
 @app.route('/invoice/create/<int:order_id>', methods=['GET', 'POST'])
@@ -1973,6 +2010,17 @@ def danger_zone():
     if request.method == 'POST':
         return redirect(url_for('danger_zone'))
     return render_template('danger_zone.html', days_skipped=0, show_passwords=False, email_required=False)
+
+@app.route('/order/shipped/<int:order_id>', methods=['POST'])
+@admin_required
+def mark_shipped(order_id):
+    order = Order.query.get_or_404(order_id)
+    order.status = 'Shipped'
+    db.session.commit()
+    
+    log_action('Admin', g.user.username, 'Fulfillment', 'Order', order.order_code, 'Success', 'Marked as Shipped')
+    flash(f"Order {order.order_code} marked as Shipped.", "success")
+    return redirect(url_for('orders'))
 
 # ==============================================================================
 # SECTION 8: MAIN EXECUTION

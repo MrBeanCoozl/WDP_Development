@@ -11,18 +11,27 @@
     .filter-group { display: flex; flex-direction: column; gap: 5px; }
     .filter-label { font-size: 12px; font-weight: 600; color: #7f8c8d; text-transform: uppercase; }
     .filter-input, .filter-select { padding: 10px 12px; border: 1px solid #dcdcdc; border-radius: 6px; font-size: 14px; min-width: 150px; }
+    
     .btn-filter { background-color: #34495e; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; }
     .btn-reset { background-color: #ecf0f1; color: #7f8c8d; border: 1px solid #bdc3c7; padding: 10px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; margin-top: auto; height: 42px; text-decoration: none; display: flex; align-items: center; }
+    
     .table-container { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden; }
     .table { width: 100%; border-collapse: collapse; }
     .table th { background-color: #f8f9fa; color: #2d3436; font-weight: 700; padding: 15px; text-align: left; border-bottom: 2px solid #dfe6e9; }
     .table td { padding: 15px; border-bottom: 1px solid #f1f2f6; color: #636e72; vertical-align: middle; }
-    .badge { padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; text-transform: uppercase; display: inline-block; }
-    .badge-Paid { background-color: #a5d6a7; color: #1b5e20; }
-    .badge-Pending { background-color: #ffe082; color: #5d4037; }
-    .badge-Sent { background-color: #90caf9; color: #0d47a1; }
-    .badge-Overdue { background-color: #ef9a9a; color: #b71c1c; }
-    .btn-view { padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 600; background-color: #636e72; color: white; }
+    
+    /* UPDATED BADGE STYLES */
+    .badge { padding: 5px 12px; border-radius: 15px; font-size: 11px; font-weight: 800; text-transform: uppercase; display: inline-block; letter-spacing: 0.5px; }
+    .badge-Paid { background-color: #dcfce7; color: #166534; }
+    .badge-Pending { background-color: #fef9c3; color: #854d0e; }
+    .badge-Cancelled { background-color: #fee2e2; color: #991b1b; text-decoration: line-through; }
+    .badge-Expired { background-color: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+    
+    .action-group { display: flex; gap: 8px; justify-content: center; }
+    .btn-view { padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600; background-color: #e5e7eb; color: #374151; transition: 0.2s; }
+    .btn-view:hover { background-color: #d1d5db; }
+    .btn-edit { padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 12px; font-weight: 600; background-color: #34495e; color: white; transition: 0.2s; }
+    .btn-edit:hover { background-color: #2c3e50; }
 </style>
 
 <form method="GET" action="{{ url_for('invoices') }}" class="filter-container">
@@ -36,8 +45,8 @@
             <option value="All" {% if request.args.get('status') == 'All' %}selected{% endif %}>All Statuses</option>
             <option value="Paid" {% if request.args.get('status') == 'Paid' %}selected{% endif %}>Paid</option>
             <option value="Pending" {% if request.args.get('status') == 'Pending' %}selected{% endif %}>Pending</option>
-            <option value="Sent" {% if request.args.get('status') == 'Sent' %}selected{% endif %}>Sent</option>
-            <option value="Overdue" {% if request.args.get('status') == 'Overdue' %}selected{% endif %}>Overdue</option>
+            <option value="Cancelled" {% if request.args.get('status') == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+            <option value="Expired" {% if request.args.get('status') == 'Expired' %}selected{% endif %}>Expired</option>
         </select>
     </div>
     <div class="filter-group">
@@ -73,12 +82,15 @@
                 <td>{{ invoice.client.name }}</td>
                 <td style="font-weight: bold;">${{ "%.2f"|format(invoice.amount) }}</td>
                 <td>{{ invoice.date_created.strftime('%Y-%m-%d') }}</td>
-                <td>{{ invoice.date_due.strftime('%Y-%m-%d') }}</td>
+                <td>{{ invoice.date_due.strftime('%Y-%m-%d') if invoice.date_due else 'N/A' }}</td>
                 <td style="text-align: center;">
                     <span class="badge badge-{{ invoice.status }}">{{ invoice.status }}</span>
                 </td>
                 <td style="text-align: center;">
-                    <a href="{{ url_for('view_invoice', invoice_id=invoice.id) }}" class="btn-view">View</a>
+                    <div class="action-group">
+                        <a href="{{ url_for('view_invoice', invoice_id=invoice.id) }}" class="btn-view">View</a>
+                        <a href="{{ url_for('edit_invoice', invoice_id=invoice.id) }}" class="btn-edit">Edit</a>
+                    </div>
                 </td>
             </tr>
             {% else %}

@@ -16,6 +16,7 @@
         --bg: #f4f6f8;
         --success: #27ae60;
         --warning: #f39c12;
+        --danger: #dc2626; /* Added for Cancelled status */
     }
     
     body {
@@ -25,11 +26,10 @@
     }
 
     /* --- LAYOUT CONTAINERS --- */
-    /* Keeps everything strictly aligned to the center at 900px */
     .layout-container {
         max-width: 900px;
         margin: 0 auto;
-        padding: 0 20px; /* Prevents touching edges on small screens */
+        padding: 0 20px; 
     }
 
     /* --- TOP ACTION BAR --- */
@@ -80,10 +80,10 @@
         margin-bottom: 50px;
     }
 
-    /* --- HEADER GRID (Fixed Alignment) --- */
+    /* --- HEADER GRID --- */
     .header-grid {
         display: grid;
-        grid-template-columns: 1fr auto; /* Left takes space, Right fits content */
+        grid-template-columns: 1fr auto; 
         gap: 20px;
         border-bottom: 2px solid var(--border);
         padding-bottom: 40px;
@@ -108,7 +108,7 @@
         text-align: right;
         display: flex;
         flex-direction: column;
-        gap: 15px; /* Spacing between Invoice # and Status */
+        gap: 15px; 
     }
 
     .meta-group label {
@@ -144,6 +144,12 @@
         background: #fef5e7;
         color: var(--warning);
         border: 1px solid #fad7a0;
+    }
+    /* NEW: Cancelled Style */
+    .status-badge.cancelled {
+        background: #fee2e2;
+        color: var(--danger);
+        border: 1px solid #fecaca;
     }
 
     /* --- ADDRESS SECTION --- */
@@ -267,6 +273,8 @@
                     <div class="value">
                         {% if invoice.status == 'Paid' %}
                             <span class="status-badge paid">Paid</span>
+                        {% elif invoice.status == 'Cancelled' %}
+                            <span class="status-badge cancelled">Cancelled</span>
                         {% else %}
                             <span class="status-badge unpaid">Pending</span>
                         {% endif %}
@@ -289,7 +297,9 @@
                 <p>
                     <strong>{{ invoice.client.name }}</strong><br>
                     {{ invoice.client.email }}<br>
+                    {% if invoice.client.custom_id %}
                     Client ID: {{ invoice.client.custom_id }}
+                    {% endif %}
                 </p>
             </div>
         </div>
@@ -350,9 +360,11 @@
 </div>
 
 <script>
-    // Log Download
+    // Log Download (Optional: only if route exists)
+    {% if url_for('log_invoice_download', invoice_id=invoice.id) %}
     window.onbeforeprint = function() {
         fetch("{{ url_for('log_invoice_download', invoice_id=invoice.id) }}", { method: 'POST' });
     };
+    {% endif %}
 </script>
 {% endblock %}
