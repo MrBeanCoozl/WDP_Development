@@ -26,15 +26,16 @@
             <button type="submit" class="btn-auth">Continue</button>
         </form>
 
-        <div class="divider"><span>OR CONTINUE WITH</span></div>
+       <div class="divider"><span>OR CONTINUE WITH</span></div>
 
         <a href="{{ url_for('google_login') }}" class="social-btn">
             <i class="fa-brands fa-google"></i> Google
         </a>
-        <a href="#" class="social-btn">
-            <i class="fa-brands fa-apple"></i> Apple
+
+        <a href="{{ url_for('discord_login') }}" class="social-btn" style="background: #5865F2; color: white; border-color: #5865F2;">
+            <i class="fa-brands fa-discord"></i> Discord
         </a>
-        
+                
         <div class="admin-link">Are you a staff member? <a href="{{ url_for('login') }}">Admin Login</a></div>
     </div>
 </div>

@@ -18,82 +18,79 @@ import traceback
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
-from authlib.integrations.flask_client import OAuth
 
+# Load environment variables
 load_dotenv()
-
-# 2. CREATE the Flask app instance (This defines the name 'app')
-app = Flask(__name__)
-app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'default_secret_key')
-
-# 3. Configure Google Credentials
-app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
-app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
-
-# 4. NOW initialize OAuth using the 'app' we just created
-oauth = OAuth(app)
-
-# 5. Register Google
-google = oauth.register(
-    name='google',
-    client_id=app.config.get('GOOGLE_CLIENT_ID'),
-    client_secret=app.config.get('GOOGLE_CLIENT_SECRET'),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'}
-)
-# Google Auth Library Check
-try:
-    from authlib.integrations.flask_client import OAuth
-    authlib_installed = True
-except ImportError:
-    authlib_installed = False
-    print("Warning: Authlib not installed. Google Login will be disabled.")
 
 # ==============================================================================
 # SECTION 2: APP CONFIGURATION & SETUP
 # ==============================================================================
+# 1. Initialize Flask App (Single Instance)
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here' 
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your_secret_key_here')
 
+# 2. Database Configuration
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'business_data.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'poolclass': NullPool}
 
-# Upload Config
+# 3. Upload Configuration
 UPLOAD_FOLDER = os.path.join(basedir, 'static', 'profile_pics')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Email Config
+# 4. Email Configuration
 app.config['SMTP_SERVER'] = 'smtp.gmail.com'
 app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'.strip()
 app.config['SMTP_PASSWORD'] = 'xfxx kqbw mrsv wsvc'.strip()
 
-# --- GOOGLE OAUTH SETUP ---
-print(f"DEBUG: Found Client ID? {'YES' if os.environ.get('GOOGLE_CLIENT_ID') else 'NO'}")
-
+# ==============================================================================
+# SECTION 3: OAUTH SETUP (GOOGLE & DISCORD)
+# ==============================================================================
+# Load Keys
 app.config['GOOGLE_CLIENT_ID'] = os.environ.get('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.environ.get('GOOGLE_CLIENT_SECRET')
+app.config['DISCORD_CLIENT_ID'] = os.environ.get('DISCORD_CLIENT_ID')
+app.config['DISCORD_CLIENT_SECRET'] = os.environ.get('DISCORD_CLIENT_SECRET')
 
+# Debug Print
+print(f"DEBUG: Found Google ID? {'YES' if app.config['GOOGLE_CLIENT_ID'] else 'NO'}")
+print(f"DEBUG: Found Discord ID? {'YES' if app.config['DISCORD_CLIENT_ID'] else 'NO'}")
+
+# Initialize OAuth
+try:
+    from authlib.integrations.flask_client import OAuth
+    oauth = OAuth(app)
+    authlib_installed = True
+except ImportError:
+    authlib_installed = False
+    print("Warning: Authlib not installed. Social Login will be disabled.")
 
 if authlib_installed:
-    oauth = OAuth(app)
+    # --- Register Google ---
     google = oauth.register(
         name='google',
         client_id=app.config['GOOGLE_CLIENT_ID'],
         client_secret=app.config['GOOGLE_CLIENT_SECRET'],
-        access_token_url='https://accounts.google.com/o/oauth2/token',
-        access_token_params=None,
-        authorize_url='https://accounts.google.com/o/oauth2/auth',
-        authorize_params=None,
-        api_base_url='https://www.googleapis.com/oauth2/v1/',
-        userinfo_endpoint='https://openidconnect.googleapis.com/v1/userinfo',
-        client_kwargs={'scope': 'email profile'},
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'}
     )
 
+    # --- Register Discord (NEW) ---
+    discord = oauth.register(
+        name='discord',
+        client_id=app.config['DISCORD_CLIENT_ID'],
+        client_secret=app.config['DISCORD_CLIENT_SECRET'],
+        authorize_url='https://discord.com/api/oauth2/authorize',
+        access_token_url='https://discord.com/api/oauth2/token',
+        api_base_url='https://discord.com/api/',
+        client_kwargs={'scope': 'identify email'}
+    )
+
+# Initialize Database
 db = SQLAlchemy(app)
 MAX_LOGIN_ATTEMPTS = 5
 
@@ -777,6 +774,62 @@ def google_callback():
         print("========================================\n\n")
         
         flash(f"Google Sign-In failed: {str(e)}", "danger")
+        return redirect(url_for('store_auth'))
+
+# Discord Routes
+@app.route('/auth/discord')
+def discord_login():
+    redirect_uri = url_for('discord_callback', _external=True)
+    return discord.authorize_redirect(redirect_uri)
+
+@app.route('/auth/discord/callback')
+def discord_callback():
+    try:
+        token = discord.authorize_access_token()
+        # Discord returns user info at /users/@me
+        resp = discord.get('users/@me')
+        user_info = resp.json()
+        
+        email = user_info.get('email')
+        if not email:
+            flash("Could not fetch email from Discord.", "danger")
+            return redirect(url_for('store_auth'))
+
+        username = user_info.get('username')
+        # Discord doesn't really have "First/Last" names, so we approximate
+        first_name = username
+        last_name = "" 
+        
+        # --- DATABASE LOGIC (Standard) ---
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            # Create Account
+            count = User.query.count() + 1
+            custom_id = f"CUST-{datetime.now().year}-{count:03d}"
+            user = User(
+                custom_id=custom_id, username=email, email=email,
+                password="DISCORD_OAUTH_USER", 
+                first_name=first_name, last_name=last_name,
+                role='Customer', auth_provider='discord', is_verified=True
+            )
+            db.session.add(user)
+            db.session.commit()
+            
+            session['user_id'] = user.id
+            flash("Account created via Discord!", "success")
+            return redirect(url_for('store_setup_password'))
+        
+        if user.role != 'Customer':
+            flash("Staff accounts cannot use Social Login.", "danger")
+            return redirect(url_for('login'))
+
+        session['user_id'] = user.id
+        flash(f"Welcome back, {first_name}!", "success")
+        return redirect(url_for('store_home'))
+
+    except Exception as e:
+        flash(f"Discord Login Failed: {str(e)}", "danger")
         return redirect(url_for('store_auth'))
 
 @app.route('/store/setup_password', methods=['GET', 'POST'])
