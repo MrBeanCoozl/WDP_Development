@@ -240,17 +240,6 @@
             </label>
             <input type="text" id="tempPasswordInput" name="temp_password" class="modal-input" required>
 
-            <label class="modal-label" style="margin-top: 15px; color: #e67e22;">Admin Verification (OTP)</label>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" name="admin_otp" class="modal-input" placeholder="Check your email" required style="margin-bottom: 0;">
-                <button type="button" class="btn-confirm-reset" style="background: #f39c12; width: auto; white-space: nowrap; font-size: 12px;" onclick="sendAdminOTP(this)">
-                    Get OTP
-                </button>
-            </div>
-            <div id="otpMessage" style="font-size: 11px; color: green; margin-top: 5px; display: none;">
-                <i class="fa-solid fa-check"></i> OTP Sent to your email.
-            </div>
-
             <div class="modal-actions">
                 <button type="button" class="btn-cancel" onclick="closeResetModal()">Cancel</button>
                 <button type="submit" class="btn-confirm-reset">Update User</button>
@@ -268,15 +257,18 @@
     }
     function closeDeleteModal() { document.getElementById('deleteModal').style.display = 'none'; }
 
-    // Reset Modal
+// Reset Modal (Updated: Focus on Temp Password)
     function openResetModal(userId, username, email) {
         document.getElementById('resetUsername').innerText = username;
         document.getElementById('resetUsernameInput').value = username;
         document.getElementById('resetEmailInput').value = (email && email !== 'None') ? email : '';
         document.getElementById('resetForm').action = "/admin/reset_password/" + userId;
         document.getElementById('resetModal').style.display = 'flex';
-        const msg = document.getElementById('otpMessage');
-        if(msg) msg.style.display = 'none';
+        
+        // Place cursor in the Temporary Password field
+        setTimeout(function() {
+            document.getElementById('tempPasswordInput').focus();
+        }, 100);
     }
     function closeResetModal() { document.getElementById('resetModal').style.display = 'none'; }
 

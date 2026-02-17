@@ -20,6 +20,8 @@ from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, session, g, jsonify
 import google.generativeai as genai
+import socket  # <--- Needed for timeout errors
+from smtplib import SMTPAuthenticationError, SMTPConnectError, SMTPException
 
 # Load environment variables
 load_dotenv()
@@ -47,7 +49,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # 4. Email Configuration
 app.config['SMTP_SERVER'] = 'smtp.gmail.com'
 app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'.strip()
-app.config['SMTP_PASSWORD'] = 'xfxx kqbw mrsv wsvc'.strip()
+app.config['SMTP_PASSWORD'] = 'amyt ywtr yjds vqkc'.strip()
 
 # ==============================================================================
 # SECTION 3: OAUTH SETUP (GOOGLE & DISCORD)
@@ -218,22 +220,47 @@ def send_temp_password_email(user_email, temp_password):
     sender_email = app.config.get('SMTP_EMAIL')
     sender_password = app.config.get('SMTP_PASSWORD')
     smtp_server = app.config.get('SMTP_SERVER')
-    if not sender_email or not sender_password: return False, "Missing credentials"
+
+    if not sender_email or not sender_password: 
+        return False, "System Config Error: Missing Admin Email/Password."
+
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = user_email
     msg['Subject'] = "Security Notice: Temporary Password Reset"
-    body = f"Your temp password is: {temp_password}"
+    body = f"Your temporary password is: {temp_password}\n\nPlease login and change it immediately."
     msg.attach(MIMEText(body, 'plain'))
+
     try:
-        server = smtplib.SMTP(smtp_server, 587)
+        # 1. Try to Connect (with a 10-second timeout)
+        server = smtplib.SMTP(smtp_server, 587, timeout=10)
+        server.set_debuglevel(1) # Prints detailed logs to your terminal
         server.starttls()
+        
+        # 2. Try to Login
         server.login(sender_email, sender_password)
+        
+        # 3. Try to Send
         server.sendmail(sender_email, user_email, msg.as_string())
         server.quit()
         return True, "Sent"
+
+    except (socket.timeout, TimeoutError) as e:
+        # This confirms the Firewall/ISP Blocking issue
+        return False, "TIMEOUT: Port 587 is blocked. Try a different network (like a hotspot)."
+        
+    except ConnectionRefusedError as e:
+        return False, "CONNECTION REFUSED: Server rejected the connection. Port blocked or Server down."
+        
+    except SMTPAuthenticationError as e:
+        return False, "AUTH ERROR: Google rejected the password. Ensure you are using the 16-char App Password."
+        
+    except SMTPConnectError as e:
+        return False, "CONNECT ERROR: Could not handshake with Gmail. Check internet connection."
+        
     except Exception as e:
-        return False, "Failed"
+        # Catch-all for other weird errors
+        return False, f"UNKNOWN ERROR: {str(e)}"
 
 def is_password_strong(password):
     if len(password) < 8: return False, "Password must be at least 8 characters."
@@ -1836,19 +1863,32 @@ def login():
         user = User.query.filter_by(username=username).first()
         
         if user:
-            # 1. Check if already suspended
+            # 1. Check if suspended
             if user.is_suspended:
                 flash("This account has been suspended. Please contact a SuperAdmin to unlock it.", "danger")
                 return render_template('login.html')
 
-            # 2. Check Password
-            if user.password == password:
+            # 2. Check Password (Supports both Plain Text Temp Passwords & Hashed)
+            is_valid = False
+            if user.password.startswith('scrypt:'):
+                is_valid = check_password_hash(user.password, password)
+            else:
+                is_valid = (user.password == password)
+
+            if is_valid:
                 # SEPARATION CHECK: Ensure Customers cannot use Admin Panel
                 if user.role == 'Customer':
                     flash("Access Denied: Customers must use the Store Login.", "danger")
                     return redirect(url_for('store_auth'))
                 
-                # SUCCESS: Reset counter and log in
+                # --- NEW: FIRST LOGIN / TEMP PASSWORD CHECK ---
+                if user.must_change_password:
+                    session['user_id'] = user.id
+                    flash("Welcome! For security, please set your email and a new password.", "info")
+                    return redirect(url_for('change_password'))
+                # ----------------------------------------------
+
+                # SUCCESS
                 user.failed_attempts = 0
                 db.session.commit()
                 
@@ -1862,7 +1902,6 @@ def login():
                 db.session.commit()
                 
                 remaining = 5 - user.failed_attempts
-                
                 if remaining <= 0:
                     user.is_suspended = True
                     db.session.commit()
@@ -1870,9 +1909,7 @@ def login():
                     flash("Account suspended due to too many failed login attempts.", "danger")
                 else:
                     flash(f"Invalid Admin Credentials. {remaining} attempts remaining.", "danger")
-                    
         else:
-            # User does not exist (Generic message for security)
             flash("Invalid Admin Credentials", "danger")
             
     return render_template('login.html')
@@ -2297,22 +2334,64 @@ def error_page(): return render_template('error.html')
 def change_password():
     if 'user_id' not in session: return redirect(url_for('login'))
     user = User.query.get(session['user_id'])
+    
     if request.method == 'POST':
-        user.password = request.form['new_password']
+        new_pw = request.form.get('new_password')
+        email_input = request.form.get('email')
+        
+        # 1. Enforce Email Requirement
+        if not user.email and not email_input:
+            flash("You must register a recovery email address to continue.", "danger")
+            # Force UI to show email field
+            return render_template('change_password.html', user=user, email_required=True)
+            
+        # 2. Prevent Reusing the Temporary/Old Password
+        # Check against plain text (temp password)
+        if user.password == new_pw:
+            flash("For security, you cannot reuse your temporary password.", "danger")
+            return render_template('change_password.html', user=user, email_required=(not user.email))
+        
+        # Check against hashed password
+        if user.password.startswith('scrypt:') and check_password_hash(user.password, new_pw):
+            flash("You cannot reuse your old password.", "danger")
+            return render_template('change_password.html', user=user, email_required=(not user.email))
+
+        # 3. Save Updates
+        if email_input:
+            user.email = email_input
+            
+        user.password = generate_password_hash(new_pw)
         user.must_change_password = False
         db.session.commit()
+        
+        flash("Account setup complete! You are now logged in.", "success")
         return redirect(url_for('dashboard'))
-    return render_template('change_password.html', user=user, email_required=False)
+        
+    # If user has no email, force them to enter it
+    force_email = (user.email is None or user.email == '')
+    return render_template('change_password.html', user=user, email_required=force_email)
 
 @app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
 @admin_required
 def reset_password(user_id):
     user = User.query.get_or_404(user_id)
+    
+    # 1. Update Username and Email from the Modal
+    new_username = request.form.get('new_username')
+    new_email = request.form.get('new_email')
+    
+    if new_username: user.username = new_username
+    if new_email: user.email = new_email
+    
+    # 2. Set Temporary Password (stored as plain text for first login)
     user.password = request.form.get('temp_password')
+    
+    # 3. Force them to change it on next login
     user.must_change_password = True
+    
     db.session.commit()
-    log_action('Admin', g.user.username, 'Reset Password', 'User', user.username, 'Success', 'Admin forced password reset')
-    flash(f'Password reset for {user.username}.', 'success')
+    log_action('Admin', g.user.username, 'Reset Password', 'User', user.username, 'Success', 'Admin reset credentials')
+    flash(f'Credentials updated for {user.username}. They will be required to change their password on next login.', 'success')
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin/suspend/<int:user_id>', methods=['POST'])
