@@ -1,0 +1,192 @@
+{% extends "store_base.html" %}
+
+{% block title %}About Us | Shop.co{% endblock %}
+
+{% block content %}
+
+<style>
+    /* PREMIUM HERO SECTION */
+    .about-hero {
+        background-color: #f4f4f5;
+        height: 60vh;
+        min-height: 400px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin-bottom: 80px;
+        position: relative;
+        overflow: hidden;
+    }
+    .about-hero h1 {
+        font-size: 56px;
+        font-weight: 800;
+        letter-spacing: -2px;
+        margin: 0;
+        color: #111;
+        z-index: 2;
+        position: relative;
+    }
+    .about-hero p {
+        font-size: 18px;
+        color: #555;
+        margin-top: 20px;
+        max-width: 600px;
+        line-height: 1.6;
+    }
+
+    /* GRID SECTIONS */
+    .about-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 80px;
+        align-items: center;
+        margin-bottom: 120px;
+    }
+    .about-content h2 {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 25px;
+        letter-spacing: -1px;
+    }
+    .about-content p {
+        font-size: 16px;
+        color: #555;
+        line-height: 1.8;
+        margin-bottom: 20px;
+    }
+    .about-image {
+        width: 100%;
+        height: 500px;
+        background-color: #e5e5e5;
+        object-fit: cover;
+        border-radius: 4px;
+    }
+
+    /* VALUES SECTION */
+    .values-section {
+        background: #111;
+        color: white;
+        padding: 100px 0;
+        text-align: center;
+        margin-bottom: 120px;
+    }
+    .values-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 40px;
+        max-width: 1200px;
+        margin: 60px auto 0;
+        padding: 0 40px;
+    }
+    .value-card h3 {
+        font-size: 20px;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+    .value-card p {
+        font-size: 14px;
+        color: #aaa;
+        line-height: 1.6;
+    }
+    .value-icon {
+        font-size: 30px;
+        margin-bottom: 20px;
+        color: white;
+    }
+
+    /* LOCATION SECTION */
+    .location-wrapper {
+        text-align: center;
+        margin-bottom: 120px;
+    }
+    .map-placeholder {
+        width: 100%;
+        height: 400px;
+        background-color: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-weight: 600;
+        margin-top: 40px;
+        border-radius: 8px;
+    }
+
+    @media (max-width: 900px) {
+        .about-grid { grid-template-columns: 1fr; gap: 40px; }
+        .about-image { height: 350px; }
+        .values-grid { grid-template-columns: 1fr; }
+        .about-hero h1 { font-size: 40px; }
+    }
+</style>
+
+<div class="about-hero">
+    <div class="container">
+        <h1>Redefining Modern Essentials.</h1>
+        <p>Founded in 2024, Shop.co is dedicated to the art of timeless style, ethical sourcing, and premium quality.</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="about-grid">
+        <div class="about-content">
+            <h2>Our Story</h2>
+            <p>It started with a simple idea: clothing shouldn't just look good, it should feel good and last longer. What began as a small studio in downtown Singapore has grown into a global destination for those who appreciate the finer details.</p>
+            <p>We believe in "slow fashion"—the concept that buying less but buying better is the future. Every piece in our collection is meticulously crafted to stand the test of time, both in durability and style.</p>
+        </div>
+        <img src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" alt="Our Studio" class="about-image">
+    </div>
+
+    <div class="about-grid">
+        <img src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" alt="Our Process" class="about-image" style="order: -1;">
+        <div class="about-content">
+            <h2>Our Mission</h2>
+            <p>We are on a mission to democratize luxury quality. By cutting out the middlemen and working directly with the world's finest manufacturers, we bring you designer-grade materials at a fraction of the traditional cost.</p>
+            <p>Transparency is at our core. From the thread count to the factory conditions, we ensure every step of our supply chain meets rigorous ethical standards.</p>
+        </div>
+    </div>
+</div>
+
+<div class="values-section">
+    <h2 style="font-size: 36px; font-weight: 700;">Our Core Values</h2>
+    <div class="values-grid">
+        <div class="value-card">
+            <i class="fa-regular fa-gem value-icon"></i>
+            <h3>Quality First</h3>
+            <p>We never compromise on materials. If it's not the best, it doesn't make the cut.</p>
+        </div>
+        <div class="value-card">
+            <i class="fa-solid fa-leaf value-icon"></i>
+            <h3>Sustainability</h3>
+            <p>We use 100% organic cotton and recycled packaging to minimize our footprint.</p>
+        </div>
+        <div class="value-card">
+            <i class="fa-solid fa-users value-icon"></i>
+            <h3>Customer Focus</h3>
+            <p>Our customers are our community. We build products based on your feedback.</p>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="location-wrapper">
+        <h2>Visit Our Flagship</h2>
+        <p style="color: #666; margin-top: 10px;">Experience our collection in person.</p>
+        
+        <div style="margin-top: 30px; font-size: 14px; line-height: 1.6;">
+            <strong>Shop.co HQ</strong><br>
+            88 Orchard Road, #05-12<br>
+            Singapore 238888<br>
+            <br>
+            <em>Open Daily: 10am - 9pm</em>
+        </div>
+
+        <div class="map-placeholder">
+            <i class="fa-solid fa-map-location-dot" style="font-size: 40px; margin-right: 15px;"></i>
+            Interactive Map Loading...
+        </div>
+    </div>
+</div>
+
+{% endblock %}

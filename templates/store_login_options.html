@@ -1,0 +1,43 @@
+{% extends "store_base.html" %}
+{% block content %}
+<style>
+    .options-wrapper { min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .options-card { width: 100%; max-width: 400px; text-align: center; }
+    .user-greeting { font-size: 18px; margin-bottom: 30px; color: #333; }
+    .user-email { font-weight: 800; display: block; margin-top: 5px; }
+    
+    .btn-option { 
+        display: flex; align-items: center; justify-content: space-between;
+        width: 100%; padding: 20px; margin-bottom: 15px;
+        background: white; border: 1px solid #e5e5e5; border-radius: 8px;
+        text-decoration: none; color: #333; font-weight: 600; transition: 0.2s;
+        box-sizing: border-box;
+    }
+    .btn-option:hover { border-color: black; background: #f9f9f9; }
+    .btn-option i { font-size: 20px; }
+    
+    .back-link { margin-top: 20px; display: inline-block; color: #666; font-size: 13px; text-decoration: underline; }
+</style>
+
+<div class="options-wrapper">
+    <div class="options-card">
+        <h2 style="font-weight: 800; margin-bottom: 10px;">Welcome Back</h2>
+        <div class="user-greeting">
+            How would you like to log in?
+            <span class="user-email">{{ email }}</span>
+        </div>
+
+        <a href="{{ url_for('store_login_password') }}" class="btn-option">
+            <span><i class="fa-solid fa-key" style="margin-right:10px;"></i> Use Password</span>
+            <i class="fa-solid fa-chevron-right"></i>
+        </a>
+
+        <a href="{{ url_for('store_initiate_otp') }}" class="btn-option">
+            <span><i class="fa-solid fa-envelope-open-text" style="margin-right:10px;"></i> Email One-Time Code</span>
+            <i class="fa-solid fa-chevron-right"></i>
+        </a>
+
+        <a href="{{ url_for('store_auth') }}" class="back-link">Use a different email</a>
+    </div>
+</div>
+{% endblock %}

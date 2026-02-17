@@ -244,8 +244,17 @@ def is_password_strong(password):
 def load_user():
     g.user = None
     if 'user_id' in session: 
-        try: g.user = User.query.get(session['user_id'])
-        except: session.clear() 
+        try: 
+            user = User.query.get(session['user_id'])
+            if user:
+                if user.is_suspended:
+                    session.clear() # Force Logout
+                    flash("Your account has been suspended. Please contact support.", "danger")
+                else:
+                    g.user = user
+            else:
+                session.clear()
+        except: session.clear()
 
 def admin_required(f):
     @wraps(f)
@@ -542,6 +551,26 @@ def store_shop():
         current_sort=sort_by, search_query=search_query, current_min_price=min_price,
         current_max_price=max_price, selected_sizes=selected_sizes, db_min_price=db_min_price, db_max_price=db_max_price)
 
+# --- NEW ROUTES FOR ABOUT & CONTACT ---
+
+@app.route('/about')
+def store_about():
+    return render_template('store_about.html')
+
+@app.route('/contact', methods=['GET', 'POST'])
+def store_contact():
+    if request.method == 'POST':
+        # Capture form data (for now, we just print it)
+        name = request.form.get('name')
+        subject = request.form.get('subject')
+        
+        # In a real app, you would send an email here
+        print(f"\n[CONTACT FORM] From: {name} | Subject: {subject}\n")
+        
+        flash("Message sent! We'll get back to you shortly.", "success")
+        return redirect(url_for('store_contact'))
+        
+    return render_template('store_contact.html')
 # --- AUTHENTICATION FLOW ---
 
 # --- AUTH FLOW UPDATES ---
@@ -556,39 +585,75 @@ def store_auth():
         user = User.query.filter_by(email=email).first()
         
         if user:
+            # Separation Check
             if user.role != 'Customer':
                 flash("Staff members must use the Admin Login Portal.", "warning")
                 return redirect(url_for('login'))
-                
-            # EXISTING CUSTOMER: Default to OTP
-            otp = f"{random.randint(100000, 999999)}"
-            user.otp = otp
-            user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
-            db.session.commit()
             
-            send_otp_email(email, otp)
-            print(f"\n[LOGIN OTP] Code for {email}: {otp}\n")
-            
-            session['pending_user_id'] = user.id
-            return redirect(url_for('store_verify'))
+            # --- NEW FLOW: Don't send OTP yet. Redirect to Options. ---
+            return redirect(url_for('store_login_options'))
         else:
+            # New User -> Signup
             return redirect(url_for('store_signup_details'))
             
     return render_template('store_auth.html')
 
+@app.route('/store/login/options')
+def store_login_options():
+    """Step 2: User selects how they want to log in."""
+    email = session.get('auth_email')
+    if not email: return redirect(url_for('store_auth'))
+    return render_template('store_login_options.html', email=email)
+
+@app.route('/store/login/initiate_otp')
+def store_initiate_otp():
+    """Sends the OTP and redirects to verify page."""
+    email = session.get('auth_email')
+    if not email: return redirect(url_for('store_auth'))
+    
+    user = User.query.filter_by(email=email).first()
+    if not user: return redirect(url_for('store_auth'))
+    
+    # Check Suspension
+    if user.is_suspended:
+        flash("Your account has been suspended.", "danger")
+        return redirect(url_for('store_auth'))
+
+    # Generate & Send OTP
+    otp = f"{random.randint(100000, 999999)}"
+    user.otp = otp
+    user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
+    db.session.commit()
+    
+    send_otp_email(email, otp)
+    print(f"\n[LOGIN OTP] Code for {email}: {otp}\n")
+    
+    session['pending_user_id'] = user.id
+    flash(f"Verification code sent to {email}", "success")
+    return redirect(url_for('store_verify'))
+
 @app.route('/store/login/password', methods=['GET', 'POST'])
 def store_login_password():
-    """Allows customers to log in using a password instead of OTP."""
     if g.user: return redirect(url_for('store_home'))
+    
+    email = session.get('auth_email')
+    if not email: return redirect(url_for('store_auth'))
 
     if request.method == 'POST':
-        email = request.form.get('email').strip().lower()
+        # Use email from session to ensure security/consistency
         password = request.form.get('password')
         
         user = User.query.filter_by(email=email).first()
         
         if user and user.role == 'Customer':
-            # Check password hash OR plain text (legacy support)
+            if user.is_suspended:
+                flash("Your account has been suspended.", "danger")
+                return redirect(url_for('store_auth'))
+
+            if user.failed_attempts >= 5:
+                flash("Account locked. Please verify via OTP to unlock.", "danger")
+                return redirect(url_for('store_initiate_otp'))
+
             is_correct = False
             if user.password.startswith('scrypt:'):
                 is_correct = check_password_hash(user.password, password)
@@ -596,15 +661,27 @@ def store_login_password():
                 is_correct = (user.password == password)
 
             if is_correct:
+                user.failed_attempts = 0
+                db.session.commit()
                 session['user_id'] = user.id
                 flash(f"Welcome back, {user.first_name}!", "success")
                 return redirect(url_for('store_home'))
             else:
+                user.failed_attempts = (user.failed_attempts or 0) + 1
+                db.session.commit()
                 flash("Incorrect password.", "danger")
         else:
-            flash("Account not found. Please sign up.", "warning")
+            flash("Account not found.", "warning")
+            return redirect(url_for('store_auth'))
             
-    return render_template('store_login.html')
+    return render_template('store_login.html', email=email)
+
+@app.route('/store/forgot_password')
+def store_forgot_password():
+    """Step 1: User clicks Forgot Password. Set flag and send OTP."""
+    flash("To reset your password, please verify your email with a code.", "info")
+    session['reset_flow'] = True  # <--- Mark this session as a Password Reset attempt
+    return redirect(url_for('store_initiate_otp'))
 
 @app.route('/store/signup', methods=['GET', 'POST'])
 def store_signup_details():
@@ -633,51 +710,63 @@ def store_signup_details():
             return redirect(url_for('store_auth'))
 
         try:
-            # --- FIX: ROBUST ID GENERATION START ---
-            # Instead of counting, we look for the LAST used ID and add 1
+            # --- ID GENERATION START ---
+            # Get the last user who is explicitly a Customer to continue sequence
             last_cust = User.query.filter(User.custom_id.like('CUST-%')).order_by(User.id.desc()).first()
 
             if last_cust and last_cust.custom_id:
                 try:
-                    # Extract the last number (e.g. from 'CUST-2026-005' get '005')
+                    # Extract last number (e.g. 'CUST-2026-005' -> 5)
                     last_num = int(last_cust.custom_id.split('-')[-1])
                     new_num = last_num + 1
-                except ValueError:
-                    # Fallback if format is weird
+                except (ValueError, IndexError):
+                    # Fallback if ID format is broken
                     new_num = User.query.count() + 1
             else:
                 # First customer ever
                 new_num = 1
 
             custom_id = f"CUST-{datetime.now().year}-{new_num:03d}"
-            # --- FIX END ---
+            # --- ID GENERATION END ---
             
-            # Hash Password for Professional Security
             hashed_pw = generate_password_hash(password)
             
+            # Generate OTP for verification
             otp = f"{random.randint(100000, 999999)}"
             
-            # STRICTLY CREATE AS CUSTOMER ROLE
+            # CREATE USER (Note: is_verified=False initially)
             new_user = User(
-                custom_id=custom_id, username=email, email=email, 
+                custom_id=custom_id,
+                username=email, 
+                email=email, 
                 password=hashed_pw, 
-                first_name=first_name, last_name=last_name, phone=phone, gender=gender,
-                role='Customer', auth_provider='local', otp=otp,
+                first_name=first_name, 
+                last_name=last_name, 
+                phone=phone, 
+                gender=gender,
+                role='Customer',        # <--- FORCE CUSTOMER ROLE
+                auth_provider='local', 
+                otp=otp,
                 otp_expiry=datetime.utcnow() + timedelta(minutes=10),
-                is_verified=False 
+                is_verified=False       # <--- MUST BE FALSE UNTIL OTP VERIFIED
             )
+            
             db.session.add(new_user)
             db.session.commit()
             
+            log_action('Customer', new_user.username, 'Signup', 'Auth', 'N/A', 'Success', 'New Account Created')
+
+            # Send Email
             send_otp_email(email, otp)
             print(f"\n[SIGNUP OTP] Code for {email}: {otp}\n")
             
+            # Set Session for Verification Step
             session['pending_user_id'] = new_user.id 
+            
             return redirect(url_for('store_verify'))
             
         except Exception as e:
             db.session.rollback()
-            # Added better logging so you can see what failed
             print(f"Signup Error: {e}") 
             flash(f"System Error: {str(e)}", "danger")
             return render_template('store_signup.html', email=email, form_data=request.form)
@@ -687,25 +776,41 @@ def store_signup_details():
 @app.route('/store/verify', methods=['GET', 'POST'])
 def store_verify():
     pending_id = session.get('pending_user_id')
-    email = session.get('auth_email')
-    
-    if not pending_id:
-        return redirect(url_for('store_auth'))
+    if not pending_id: return redirect(url_for('store_auth'))
         
     user = User.query.get(pending_id)
     if not user: return redirect(url_for('store_auth'))
     
-    # Check if this is a new signup (Unverified) or existing login
+    # Determine if this is a new signup for UI purposes
     is_new_signup = not user.is_verified
 
     if request.method == 'POST':
-        # --- OTP SUBMISSION ---
         if 'otp' in request.form:
             otp_input = request.form.get('otp')
+            
+            # Verify OTP
             if user.otp == otp_input and user.otp_expiry > datetime.utcnow():
                 user.otp = None
                 user.is_verified = True
                 db.session.commit()
+                
+                # --- 1. CHECK FOR ACCOUNT LOCKOUT ---
+                if user.failed_attempts >= 5:
+                    session['unlock_user_id'] = user.id
+                    session.pop('pending_user_id', None)
+                    flash("Identity verified. Please change your password to unlock your account.", "warning")
+                    return redirect(url_for('store_unlock'))
+
+                # --- 2. CHECK FOR FORGOT PASSWORD FLOW (NEW) ---
+                if session.get('reset_flow'):
+                    session.pop('reset_flow', None)       # Clear the request flag
+                    session['reset_user_id'] = user.id    # Set the permission flag
+                    session.pop('pending_user_id', None)  # Clear pending ID
+                    return redirect(url_for('store_reset_password'))
+                
+                # --- 3. STANDARD LOGIN ---
+                # [NEW] Log the successful Customer Login
+                log_action('Customer', user.username, 'Login', 'Auth', 'N/A', 'Success', 'Logged in via OTP')
                 
                 session['user_id'] = user.id
                 session.pop('auth_email', None)
@@ -714,36 +819,43 @@ def store_verify():
                 flash(f"Welcome back, {user.first_name}!", "success")
                 return redirect(url_for('store_home')) 
             else:
-                flash("Invalid or expired code. Please try again.", "danger")
-
-        # --- PASSWORD SUBMISSION (Existing Users Only) ---
-        elif 'password' in request.form:
-            if is_new_signup:
-                flash("Please verify your email with the code first.", "warning")
-            else:
-                password = request.form.get('password')
-                # Check password hash OR plain text (legacy support)
-                is_correct = False
-                if user.password.startswith('scrypt:'):
-                    is_correct = check_password_hash(user.password, password)
-                else:
-                    is_correct = (user.password == password)
-
-                if is_correct:
-                    # Clear OTP if they used password
-                    user.otp = None
-                    db.session.commit()
-                    
-                    session['user_id'] = user.id
-                    session.pop('auth_email', None)
-                    session.pop('pending_user_id', None)
-                    
-                    flash(f"Welcome back, {user.first_name}!", "success")
-                    return redirect(url_for('store_home'))
-                else:
-                    flash("Incorrect password.", "danger")
+                flash("Invalid or expired code.", "danger")
             
     return render_template('store_verify.html', email=user.email, is_new_signup=is_new_signup)
+
+@app.route('/store/reset_password', methods=['GET', 'POST'])
+def store_reset_password():
+    """Step 3: User enters new password."""
+    # Security Check: Ensure user passed OTP in this session
+    reset_uid = session.get('reset_user_id')
+    if not reset_uid:
+        flash("Unauthorized access. Please verify your identity first.", "danger")
+        return redirect(url_for('store_auth'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password')
+        confirm = request.form.get('confirm')
+        
+        if password != confirm:
+            flash("Passwords do not match.", "danger")
+        else:
+            valid, msg = is_password_strong(password)
+            if not valid:
+                flash(f"Weak Password: {msg}", "danger")
+            else:
+                user = User.query.get(reset_uid)
+                user.password = generate_password_hash(password)
+                user.failed_attempts = 0 # Reset any locks
+                db.session.commit()
+                
+                # Auto Login the user
+                session['user_id'] = user.id
+                session.pop('reset_user_id', None)
+                
+                flash("Your password has been reset successfully.", "success")
+                return redirect(url_for('store_home'))
+                
+    return render_template('store_reset_password.html')
 
 @app.route('/store/resend')
 def store_resend():
@@ -770,7 +882,7 @@ def google_login():
         print(f"ERROR: Client ID is missing. Value is: {cid}")
         flash("Google Auth is not configured. Check your .env file.", "danger")
         return redirect(url_for('store_auth'))
-        
+
     redirect_uri = url_for('google_callback', _external=True)
     return google.authorize_redirect(redirect_uri)
 
@@ -813,6 +925,14 @@ def google_callback():
         if user.role != 'Customer':
             flash("Staff accounts cannot use Social Login. Please use Admin Login.", "danger")
             return redirect(url_for('login'))
+
+        # --- NEW: SUSPENSION CHECK ---
+        if user.is_suspended:
+            flash("Your account has been suspended.", "danger")
+            return redirect(url_for('store_auth'))
+        # -----------------------------
+
+        log_action('Customer', user.username, 'Login', 'Auth', 'N/A', 'Success', f'Logged in via {user.auth_provider.title()}')
 
         # 3. Log In
         session['user_id'] = user.id
@@ -883,6 +1003,14 @@ def discord_callback():
         if user.role != 'Customer':
             flash("Staff accounts cannot use Social Login.", "danger")
             return redirect(url_for('login'))
+
+      # --- NEW: SUSPENSION CHECK ---
+        if user.is_suspended:
+            flash("Your account has been suspended.", "danger")
+            return redirect(url_for('store_auth'))
+        # -----------------------------
+        
+        log_action('Customer', user.username, 'Login', 'Auth', 'N/A', 'Success', f'Logged in via {user.auth_provider.title()}')
 
         session['user_id'] = user.id
         flash(f"Welcome back, {first_name}!", "success")
@@ -1045,6 +1173,8 @@ def delete_account():
 
 @app.route('/store/logout')
 def store_logout():
+    if g.user:
+        log_action('Customer', g.user.username, 'Logout', 'Auth', 'N/A', 'Success', 'Customer Logged Out')
     session.clear()
     flash("You have been logged out.", "success")
     return redirect(url_for('store_auth'))
@@ -1086,6 +1216,7 @@ def update_profile():
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
             g.user.profile_image = filename
     db.session.commit()
+    log_action('Customer', g.user.username, 'Update Profile', 'User', g.user.id, 'Success', 'Updated Personal Details')
     flash("Profile updated successfully.", "success")
     return redirect(url_for('store_profile'))
 
@@ -1125,7 +1256,7 @@ def upload_profile_pic():
             # Update Database
             g.user.profile_image = new_filename
             db.session.commit()
-            
+            log_action('Customer', g.user.username, 'Update Picture', 'User', g.user.id, 'Success', 'Changed Profile Picture')
             flash('Profile picture updated successfully!', 'success')
             
         except Exception as e:
@@ -1182,6 +1313,7 @@ def verify_security():
         g.user.new_password_temp = None
         g.user.otp = None
         db.session.commit()
+        log_action('Customer', g.user.username, 'Security Update', 'User', g.user.id, 'Success', 'Changed Password')
         session.pop('show_password_verify', None)
         flash("Password successfully changed.", "success")
     else:
@@ -1234,6 +1366,7 @@ def verify_email_change():
         g.user.new_email_temp = None
         g.user.otp = None
         db.session.commit()
+        log_action('Customer', g.user.username, 'Security Update', 'User', g.user.id, 'Success', 'Changed Email Address')
         session.pop('show_email_verify', None)
         flash("Email address updated successfully.", "success")
     else:
@@ -1271,6 +1404,7 @@ def update_payment():
         )
         db.session.add(new_card)
         db.session.commit()
+        log_action('Customer', g.user.username, 'Update Payment', 'PaymentMethod', new_card.last4, 'Success', f'Added {new_card.card_type}')
         
         # --- NEW: AJAX Response ---
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -1649,17 +1783,46 @@ def login():
         password = request.form['password']
         user = User.query.filter_by(username=username).first()
         
-        if user and user.password == password:
-            # SEPARATION CHECK:
-            # Ensure Customers cannot use the Admin Panel login
-            if user.role == 'Customer':
-                flash("Access Denied: Customers must use the Store Login.", "danger")
-                return redirect(url_for('store_auth'))
+        if user:
+            # 1. Check if already suspended
+            if user.is_suspended:
+                flash("This account has been suspended. Please contact a SuperAdmin to unlock it.", "danger")
+                return render_template('login.html')
+
+            # 2. Check Password
+            if user.password == password:
+                # SEPARATION CHECK: Ensure Customers cannot use Admin Panel
+                if user.role == 'Customer':
+                    flash("Access Denied: Customers must use the Store Login.", "danger")
+                    return redirect(url_for('store_auth'))
+                
+                # SUCCESS: Reset counter and log in
+                user.failed_attempts = 0
+                db.session.commit()
+                
+                session['user_id'] = user.id
+                log_action('Admin', user.username, 'Login', 'Auth', 'N/A', 'Success', 'Admin Panel Login')
+                return redirect(url_for('dashboard'))
             
-            session['user_id'] = user.id
-            log_action('Admin', user.username, 'Login', 'Auth', 'N/A', 'Success', 'Admin Panel Login')
-            return redirect(url_for('dashboard'))
-        flash("Invalid Admin Credentials", "danger")
+            else:
+                # FAILURE: Increment counter
+                user.failed_attempts = (user.failed_attempts or 0) + 1
+                db.session.commit()
+                
+                remaining = 5 - user.failed_attempts
+                
+                if remaining <= 0:
+                    user.is_suspended = True
+                    db.session.commit()
+                    log_action('System', 'Security', 'Suspend User', 'User', user.username, 'Warning', 'Locked out due to failed logins')
+                    flash("Account suspended due to too many failed login attempts.", "danger")
+                else:
+                    flash(f"Invalid Admin Credentials. {remaining} attempts remaining.", "danger")
+                    
+        else:
+            # User does not exist (Generic message for security)
+            flash("Invalid Admin Credentials", "danger")
+            
     return render_template('login.html')
 
 @app.route('/dashboard')
@@ -1711,6 +1874,7 @@ def update_targets():
             val = float(val_str.replace('k', '')) * 1000 if 'k' in val_str else float(val_str.replace('m', '')) * 1000000 if 'm' in val_str else float(val_str)
             new_targets.append(val)
         save_sales_targets(new_targets)
+        log_action('Admin', g.user.username, 'System Update', 'System', 'Sales Targets', 'Success', 'Updated Dashboard Targets')
         flash('Sales targets updated.', 'success')
     except Exception as e: flash(f'Error: {str(e)}', 'danger')
     return redirect(url_for('dashboard'))
@@ -1894,13 +2058,66 @@ def log_invoice_download(invoice_id):
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+# [REPLACE THE 'audit_log' ROUTE IN app.py]
+
 @app.route('/audit')
 def audit_log():
     if not g.user or g.user.role == 'Customer': return redirect(url_for('login'))
+    
+    # 1. Get Filter Parameters
     page = request.args.get('page', 1, type=int)
-    logs_pagination = AuditLog.query.order_by(AuditLog.timestamp.desc()).paginate(page=page, per_page=10, error_out=False)
+    search_q = request.args.get('q', '').strip()
+    action_filter = request.args.get('action_type', 'All')
+    actor_filter = request.args.get('actor_type', 'All')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    query = AuditLog.query
+    
+    # 2. Apply Search Filter (Searches Description, IDs, or Action names)
+    if search_q:
+        query = query.filter(
+            or_(
+                AuditLog.description.ilike(f'%{search_q}%'),
+                AuditLog.actor_id.ilike(f'%{search_q}%'),
+                AuditLog.entity_id.ilike(f'%{search_q}%'),
+                AuditLog.action.ilike(f'%{search_q}%')
+            )
+        )
+        
+    # 3. Apply Dropdown Filters
+    if action_filter != 'All':
+        query = query.filter(AuditLog.action == action_filter)
+        
+    if actor_filter != 'All':
+        query = query.filter(AuditLog.actor_type == actor_filter)
+
+    # 4. Apply Date Range Filter
+    if start_date:
+        try:
+            s_date = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(AuditLog.timestamp >= s_date)
+        except: pass
+        
+    if end_date:
+        try:
+            # Add 1 day to include the end date fully (up to 23:59:59)
+            e_date = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(AuditLog.timestamp < e_date)
+        except: pass
+        
+    # 5. Order & Paginate
+    query = query.order_by(AuditLog.timestamp.desc())
+    logs_pagination = query.paginate(page=page, per_page=15, error_out=False)
+    
+    # 6. Fetch Unique Values for Dropdowns
     unique_actions = [r.action for r in db.session.query(AuditLog.action).distinct()]
-    return render_template('audit_log.html', logs=logs_pagination, unique_actions=unique_actions)
+    unique_actors = [r.actor_type for r in db.session.query(AuditLog.actor_type).distinct()]
+    
+    return render_template('audit_log.html', 
+                           logs=logs_pagination, 
+                           unique_actions=unique_actions, 
+                           unique_actors=unique_actors)
 
 @app.route('/audit/view/<int:log_id>')
 def audit_details(log_id):
@@ -1908,28 +2125,73 @@ def audit_details(log_id):
     log = AuditLog.query.get_or_404(log_id)
     return render_template('audit_details.html', log=log)
 
+# [REPLACE THE EXISTING 'admin_panel' ROUTE IN app.py]
+
+# [REPLACE IN app.py]
+
 @app.route('/admin/panel')
 @admin_required
 def admin_panel():
-    users = User.query.all()
     settings = get_system_settings()
-    return render_template('admin_panel.html', users=users, show_passwords=settings.get('show_passwords'))
+    
+    # Search Logic
+    search_q = request.args.get('q')
+    
+    if search_q:
+        # Filter Staff
+        staff_users = User.query.filter(
+            User.role != 'Customer', 
+            or_(User.username.ilike(f'%{search_q}%'), User.custom_id.ilike(f'%{search_q}%'))
+        ).all()
+        
+        # Filter Customers
+        customer_users = User.query.filter(
+            User.role == 'Customer',
+            or_(User.email.ilike(f'%{search_q}%'), User.first_name.ilike(f'%{search_q}%'), User.custom_id.ilike(f'%{search_q}%'))
+        ).all()
+    else:
+        # Default: Fetch ALL Staff vs ALL Customers
+        staff_users = User.query.filter(User.role != 'Customer').all()
+        customer_users = User.query.filter_by(role='Customer').all()
+
+    # CRITICAL: Sending 'staff_users' and 'customer_users' to match the new HTML
+    return render_template('admin_panel.html', 
+                           staff_users=staff_users, 
+                           customer_users=customer_users, 
+                           show_passwords=settings.get('show_passwords'))
 
 @app.route('/admin/create', methods=['GET', 'POST'])
 @admin_required
 def create_admin():
     if request.method == 'POST':
         try:
+            # 1. Check for duplicate username BEFORE trying to save
+            if User.query.filter_by(username=request.form['username']).first():
+                flash("Username already taken.", "danger")
+                return redirect(url_for('create_admin'))
+
             count = User.query.count() + 1
             custom_id = f"USR-{datetime.now().year}-{count:03d}"
-            # This allows creating admins with specific roles
-            new_user = User(custom_id=custom_id, username=request.form['username'], password=request.form['password'], role=request.form['role'], must_change_password=True)
+            
+            new_user = User(
+                custom_id=custom_id, 
+                username=request.form['username'], 
+                password=request.form['password'], 
+                role=request.form['role'], 
+                must_change_password=True
+            )
             db.session.add(new_user)
             db.session.commit()
+            log_action('Admin', g.user.username, 'Create User', 'User', new_user.username, 'Success', f'Created {new_user.role}')
+            flash("New staff account created successfully.", "success")
             return redirect(url_for('admin_panel'))
-        except: pass
+            
+        except Exception as e:
+            # 2. CRITICAL FIX: Rollback transaction to prevent "PendingRollbackError"
+            db.session.rollback()
+            flash(f"Error creating account: {str(e)}", "danger")
+            
     return render_template('admin_create.html')
-
 @app.route('/admin/edit/<int:user_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_admin(user_id):
@@ -1940,6 +2202,7 @@ def edit_admin(user_id):
             return redirect(url_for('edit_admin', user_id=user.id))
         user.role = request.form['role']
         db.session.commit()
+        log_action('Admin', g.user.username, 'Edit User', 'User', user.username, 'Success', f'Changed role to {user.role}')
         return redirect(url_for('admin_panel'))
     return render_template('admin_edit.html', user=user)
 
@@ -1950,11 +2213,14 @@ def delete_admin(user_id):
         user = User.query.get(user_id)
         db.session.delete(user)
         db.session.commit()
+        log_action('Admin', g.user.username, 'Delete User', 'User', target_name, 'Success', 'Deleted Account')
     except: pass
     return redirect(url_for('admin_panel'))
 
 @app.route('/logout')
 def logout():
+    if g.user:
+        log_action('Admin', g.user.username, 'Logout', 'Auth', 'N/A', 'Success', 'Admin Logged Out')
     session.clear()
     return redirect(url_for('login'))
 
@@ -1993,15 +2259,41 @@ def reset_password(user_id):
     user.password = request.form.get('temp_password')
     user.must_change_password = True
     db.session.commit()
+    log_action('Admin', g.user.username, 'Reset Password', 'User', user.username, 'Success', 'Admin forced password reset')
     flash(f'Password reset for {user.username}.', 'success')
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin/suspend/<int:user_id>', methods=['POST'])
 @admin_required
 def suspend_admin(user_id):
-    user = User.query.get(user_id)
-    user.is_suspended = not user.is_suspended
+    user = User.query.get_or_404(user_id)
+    
+    # Logic: "Unsuspend" action requires SuperAdmin
+    if user.is_suspended:
+        # We are trying to ACTIVATE the user
+        if g.user.role != 'SuperAdmin':
+            flash("Access Denied: Only SuperAdmins can unsuspend accounts.", "danger")
+            return redirect(url_for('admin_panel'))
+            
+        user.is_suspended = False
+        user.failed_attempts = 0 # Reset attempts on unlock
+        flash(f"User {user.username} has been unsuspended.", "success")
+        
+    else:
+        # We are trying to SUSPEND the user
+        if user.role == 'SuperAdmin':
+            flash("You cannot suspend a SuperAdmin.", "danger")
+            return redirect(url_for('admin_panel'))
+            
+        user.is_suspended = True
+        flash(f"User {user.username} has been suspended.", "warning")
+
     db.session.commit()
+
+    # --- ADD THIS LOGGING BLOCK ---
+    status_str = "Suspended" if user.is_suspended else "Unsuspended"
+    log_action('Admin', g.user.username, 'Suspend User', 'User', user.username, 'Success', f'{status_str} Account')
+
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin/danger_zone', methods=['GET', 'POST'])

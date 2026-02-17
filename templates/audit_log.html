@@ -7,124 +7,132 @@
 {% block content %}
 
 <style>
-    /* Filter Bar Styles (Consistent with Admin Panel) */
+    /* Updated Filter Bar */
     .audit-controls {
         background: white;
         padding: 20px;
         border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         margin-bottom: 25px;
+        border: 1px solid #eee;
+    }
+    
+    .filter-row {
         display: flex;
         gap: 15px;
         flex-wrap: wrap;
-        border: 1px solid #eee;
+        align-items: flex-end;
     }
-    .search-input {
-        flex: 1;
-        padding: 10px 15px;
+    
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .filter-label {
+        font-size: 12px;
+        font-weight: 700;
+        color: #7f8c8d;
+        text-transform: uppercase;
+    }
+
+    .form-control {
+        padding: 10px 12px;
         border: 1px solid #dfe6e9;
         border-radius: 6px;
-        min-width: 250px;
         font-size: 14px;
-    }
-    .filter-select {
-        padding: 10px;
-        border: 1px solid #dfe6e9;
-        border-radius: 6px;
-        background: white;
         min-width: 150px;
-        cursor: pointer;
-        font-size: 14px;
     }
+    .form-control:focus { outline: none; border-color: #34495e; }
+
     .btn-filter {
-        padding: 10px 25px;
+        padding: 10px 20px;
         background-color: #2c3e50;
         color: white;
         border: none;
         border-radius: 6px;
         font-weight: bold;
         cursor: pointer;
-        transition: 0.2s;
         font-size: 14px;
+        height: 40px; /* Align with inputs */
     }
-    .btn-filter:hover { background-color: #34495e; }
-
-    /* Table Styles (Restored to Simpler Look) */
-    .audit-table {
-        width: 100%;
-        background: white;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border-collapse: collapse;
+    .btn-reset {
+        padding: 10px 20px;
+        background-color: #ecf0f1;
+        color: #7f8c8d;
+        border: 1px solid #bdc3c7;
+        border-radius: 6px;
+        font-weight: bold;
+        text-decoration: none;
         font-size: 14px;
+        height: 38px; /* Align with inputs */
+        display: inline-flex;
+        align-items: center;
     }
-    .audit-table th {
-        background-color: #f8f9fa;
-        color: #2d3436;
-        font-weight: 700;
-        padding: 15px;
-        text-align: left;
-        border-bottom: 2px solid #dfe6e9;
-        white-space: nowrap; /* Keep headers single line */
-    }
-    .audit-table td {
-        padding: 12px 15px;
-        border-bottom: 1px solid #f1f2f6;
-        vertical-align: middle;
-        color: #555;
-    }
-    .audit-table tr:hover { background-color: #f8f9fa; }
-
-    /* Contextual Row Colors (Subtle backgrounds) */
-    /* Updated logic for Failure rows to be red */
+    
+    /* Table Styles */
+    .audit-table { width: 100%; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-collapse: collapse; font-size: 14px; }
+    .audit-table th { background-color: #f8f9fa; color: #2d3436; font-weight: 700; padding: 15px; text-align: left; border-bottom: 2px solid #dfe6e9; white-space: nowrap; }
+    .audit-table td { padding: 12px 15px; border-bottom: 1px solid #f1f2f6; vertical-align: middle; color: #555; }
+    
+    /* Status Colors */
     .row-danger { background-color: #fff5f5; border-left: 4px solid #e74c3c; } 
     .row-warning { background-color: #fffbf0; border-left: 4px solid #f1c40f; }
-    .row-success { background-color: #f0fff4; border-left: 4px solid #2ecc71; }
-
-    /* Badges */
-    .badge {
-        display: inline-block;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
     .badge-Success { background: #d1fae5; color: #065f46; }
     .badge-Failure { background: #fee2e2; color: #991b1b; }
     .badge-Warning { background: #fef3c7; color: #92400e; }
-    .badge-Danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
-
-    .actor { font-weight: bold; color: #2c3e50; }
-    .action-text { color: #34495e; font-weight: 600; }
     
     /* Pagination */
     .pagination { margin-top: 20px; display: flex; justify-content: flex-end; gap: 5px; }
-    .page-link {
-        padding: 8px 12px;
-        background: white;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        color: #333;
-        text-decoration: none;
-        font-size: 13px;
-    }
+    .page-link { padding: 8px 12px; background: white; border: 1px solid #ddd; border-radius: 4px; color: #333; text-decoration: none; font-size: 13px; }
     .page-link.active { background: #2c3e50; color: white; border-color: #2c3e50; }
 </style>
 
 <div class="audit-controls">
-    <form method="GET" action="{{ url_for('audit_log') }}" style="display: flex; gap: 15px; width: 100%;">
-        <input type="text" name="q" class="search-input" placeholder="Search logs (User, Action, Description...)" value="{{ request.args.get('q', '') }}">
+    <form method="GET" action="{{ url_for('audit_log') }}" class="filter-row">
+        <div class="filter-group" style="flex: 1;">
+            <label class="filter-label">Search</label>
+            <input type="text" name="q" class="form-control" placeholder="User, Action, Description..." value="{{ request.args.get('q', '') }}">
+        </div>
         
-        <select name="action_type" class="filter-select">
-            <option value="All">All Actions</option>
-            {% for action in unique_actions %}
-                <option value="{{ action }}" {% if request.args.get('action_type') == action %}selected{% endif %}>{{ action }}</option>
-            {% endfor %}
-        </select>
+        <div class="filter-group">
+            <label class="filter-label">User Role</label>
+            <select name="actor_type" class="form-control">
+                <option value="All">All Roles</option>
+                {% for actor in unique_actors %}
+                    <option value="{{ actor }}" {% if request.args.get('actor_type') == actor %}selected{% endif %}>{{ actor }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label class="filter-label">Action Type</label>
+            <select name="action_type" class="form-control">
+                <option value="All">All Actions</option>
+                {% for action in unique_actions %}
+                    <option value="{{ action }}" {% if request.args.get('action_type') == action %}selected{% endif %}>{{ action }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label class="filter-label">From</label>
+            <input type="date" name="start_date" class="form-control" value="{{ request.args.get('start_date', '') }}">
+        </div>
+        <div class="filter-group">
+            <label class="filter-label">To</label>
+            <input type="date" name="end_date" class="form-control" value="{{ request.args.get('end_date', '') }}">
+        </div>
         
-        <button type="submit" class="btn-filter"><i class="fa-solid fa-filter"></i> Filter</button>
+        <div class="filter-group">
+            <label class="filter-label">&nbsp;</label>
+            <div style="display: flex; gap: 10px;">
+                <button type="submit" class="btn-filter"><i class="fa-solid fa-filter"></i> Apply</button>
+                <a href="{{ url_for('audit_log') }}" class="btn-reset">Reset</a>
+            </div>
+        </div>
     </form>
 </div>
 
@@ -148,10 +156,10 @@
             </td>
             
             <td>
-                <span class="actor">{{ log.actor_id }}</span>
+                <span style="font-weight: bold; color: #2c3e50;">{{ log.actor_id }}</span>
                 <div style="font-size: 11px; color: #95a5a6;">{{ log.actor_type }}</div>
             </td>
-            <td><span class="action-text">{{ log.action }}</span></td>
+            <td><span style="color: #34495e; font-weight: 600;">{{ log.action }}</span></td>
             <td>
                 {% if log.entity_type %}
                     <span style="background: #eef2f7; padding: 2px 6px; border-radius: 3px; font-size: 12px; color: #4a5568;">
@@ -176,7 +184,7 @@
         {% else %}
         <tr>
             <td colspan="7" style="text-align: center; padding: 30px; color: #999;">
-                No logs found matching your search.
+                No logs found matching your criteria.
             </td>
         </tr>
         {% endfor %}
@@ -185,12 +193,12 @@
 
 <div class="pagination">
     {% if logs.has_prev %}
-        <a href="{{ url_for('audit_log', page=logs.prev_num, q=request.args.get('q', ''), action_type=request.args.get('action_type', 'All')) }}" class="page-link">&laquo; Prev</a>
+        <a href="{{ url_for('audit_log', page=logs.prev_num, q=request.args.get('q', ''), action_type=request.args.get('action_type', 'All'), actor_type=request.args.get('actor_type', 'All'), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}" class="page-link">&laquo; Prev</a>
     {% endif %}
 
     {% for item in logs | smart_pagination %}
         {% if item.type == 'page' %}
-            <a href="{{ url_for('audit_log', page=item.page, q=request.args.get('q', ''), action_type=request.args.get('action_type', 'All')) }}" 
+            <a href="{{ url_for('audit_log', page=item.page, q=request.args.get('q', ''), action_type=request.args.get('action_type', 'All'), actor_type=request.args.get('actor_type', 'All'), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}" 
                class="page-link {% if item.page == logs.page %}active{% endif %}">
                 {{ item.page }}
             </a>
@@ -200,7 +208,7 @@
     {% endfor %}
     
     {% if logs.has_next %}
-        <a href="{{ url_for('audit_log', page=logs.next_num, q=request.args.get('q', ''), action_type=request.args.get('action_type', 'All')) }}" class="page-link">Next &raquo;</a>
+        <a href="{{ url_for('audit_log', page=logs.next_num, q=request.args.get('q', ''), action_type=request.args.get('action_type', 'All'), actor_type=request.args.get('actor_type', 'All'), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}" class="page-link">Next &raquo;</a>
     {% endif %}
 </div>
 

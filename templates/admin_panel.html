@@ -1,117 +1,205 @@
 {% extends "base.html" %}
 
 {% block header %}
-    Admin Management Panel
+    User Management
 {% endblock %}
 
 {% block content %}
 
 <style>
-    /* --- KEEPING YOUR ORIGINAL PAGE STYLES --- */
-    .table td { vertical-align: middle; }
-
-    /* --- UPDATED STANDARDIZED MODAL STYLES (Invoice Style) --- */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
-    .modal-content { background-color: white; padding: 30px; border-radius: 12px; width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); animation: fadeIn 0.2s ease-out; }
-    .modal-icon { font-size: 50px; color: #e74c3c; margin-bottom: 15px; }
-    .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 25px; }
+    /* PANEL LAYOUT */
+    .panel-section { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 40px; border: 1px solid #eee; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+    .section-title { font-size: 18px; font-weight: 700; color: #2c3e50; display: flex; align-items: center; gap: 10px; }
     
-    /* Standardized Buttons */
+    /* TABLES */
+    .user-table { width: 100%; border-collapse: collapse; }
+    .user-table th { text-align: left; padding: 12px; background: #f8f9fa; color: #7f8c8d; font-size: 12px; text-transform: uppercase; font-weight: 700; border-bottom: 2px solid #eee; }
+    .user-table td { padding: 12px; border-bottom: 1px solid #f1f2f6; font-size: 14px; color: #2c3e50; vertical-align: middle; }
+    
+    /* BADGES */
+    .role-badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+    .role-SuperAdmin { background: #fee2e2; color: #991b1b; }
+    .role-Manager { background: #fef3c7; color: #92400e; }
+    .role-Staff { background: #e0e7ff; color: #3730a3; }
+    .role-Customer { background: #dcfce7; color: #166534; }
+
+    /* ACTION BUTTONS */
+    .btn-create { background: #2c3e50; color: white; text-decoration: none; padding: 10px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; transition: 0.2s; }
+    .btn-create:hover { background: #1a252f; }
+    
+    .action-row { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 4px; border: none; cursor: pointer; transition: 0.2s; text-decoration: none; }
+    
+    .btn-edit { background: #e0f2fe; color: #0284c7; }
+    .btn-edit:hover { background: #bae6fd; }
+    
+    .btn-delete { background: #fee2e2; color: #dc2626; }
+    .btn-delete:hover { background: #fecaca; }
+    
+    .btn-reset { background: #f3f4f6; color: #4b5563; }
+    .btn-reset:hover { background: #e5e7eb; }
+
+    /* NEW: Suspend Button Style */
+    .btn-suspend { background: #fef3c7; color: #d97706; }
+    .btn-suspend:hover { background: #fde68a; }
+    
+    .password-mask { font-family: monospace; color: #aaa; letter-spacing: 2px; }
+    .verified-check { color: #166534; font-size: 16px; }
+    .unverified-cross { color: #dc2626; font-size: 16px; }
+
+    /* MODAL STYLES */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 2000; justify-content: center; align-items: center; backdrop-filter: blur(2px); }
+    .modal-content { background-color: white; padding: 30px; border-radius: 12px; width: 400px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+    .modal-icon { font-size: 50px; margin-bottom: 15px; }
+    .modal-actions { display: flex; justify-content: center; gap: 15px; margin-top: 25px; }
     .btn-cancel { background-color: #95a5a6; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; }
     .btn-confirm-delete { background-color: #e74c3c; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
     .btn-confirm-reset { background-color: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; }
-    
-    /* Form Inputs inside Modal */
-    .modal-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; font-size: 14px; }
+    .modal-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 10px; font-size: 14px; box-sizing: border-box; }
     .modal-label { display: block; text-align: left; font-weight: bold; margin-bottom: 5px; color: #555; font-size: 13px; }
-
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 </style>
 
-<div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h3>System Administrators</h3>
-        <div>
-            {% if show_passwords %}
-                <span style="font-size: 12px; color: #e67e22; background: #fff3e0; padding: 5px 10px; border-radius: 4px; margin-right: 10px; border: 1px solid #ffe0b2;">
-                    <i class="fa-solid fa-triangle-exclamation"></i> Passwords Visible
-                </span>
-            {% endif %}
-            <a href="{{ url_for('create_admin') }}" class="btn btn-primary">
-                <i class="fa-solid fa-user-plus"></i> Create New Account
-            </a>
+<div class="panel-section">
+    <div class="section-header">
+        <div class="section-title">
+            <i class="fa-solid fa-user-shield"></i> Staff Management
         </div>
+        <a href="{{ url_for('create_admin') }}" class="btn-create">
+            <i class="fa-solid fa-plus"></i> Add New Staff
+        </a>
     </div>
 
-    <form method="GET" action="{{ url_for('admin_panel') }}" style="margin-bottom: 20px; display: flex; gap: 10px;">
-        <input type="text" name="q" placeholder="Search by ID..." value="{{ request.args.get('q', '') }}" style="padding: 10px; border: 1px solid #ddd; border-radius: 5px; width: 300px;">
-        <button type="submit" class="btn btn-secondary">Search</button>
-    </form>
-
-    <table class="table">
+    <table class="user-table">
         <thead>
             <tr>
-                <th>Admin ID</th>
+                <th>ID</th>
                 <th>Username</th>
-                <th>Email</th>
-                {% if show_passwords %} <th style="color: #e74c3c;">Password</th> {% endif %}
-                <th>Authority</th>
+                <th>Role</th>
                 <th>Status</th>
-                <th>Actions</th>
+                {% if show_passwords %}<th>Password</th>{% endif %}
+                <th style="text-align: right;">Actions</th>
             </tr>
         </thead>
         <tbody>
-            {% for user in users %}
+            {% for user in staff_users %}
             <tr>
-                <td>{{ user.custom_id }}</td>
+                <td><span style="font-family: monospace; color: #666;">{{ user.custom_id }}</span></td>
                 <td><strong>{{ user.username }}</strong></td>
+                <td><span class="role-badge role-{{ user.role }}">{{ user.role }}</span></td>
                 <td>
-                    {% if user.email %} <span style="font-size: 13px; color: #555;">{{ user.email }}</span>
-                    {% else %} <span style="font-size: 12px; color: #aaa;">Not Set</span> {% endif %}
+                    {% if user.is_suspended %}
+                        <span style="color: #dc2626; font-size: 12px; font-weight: 700;">Suspended</span>
+                    {% else %}
+                        <span style="color: #166534; font-size: 12px; font-weight: 700;">Active</span>
+                    {% endif %}
                 </td>
                 
                 {% if show_passwords %}
-                <td><code style="color: #c0392b; background: #fff5f5; padding: 4px 6px; border-radius: 4px; border: 1px solid #ffe3e3;">{{ user.password }}</code></td>
-                {% endif %}
-
                 <td>
-                    {% if user.role == 'SuperAdmin' %} <span style="color: #e74c3c; font-weight: bold;">SuperAdmin</span>
-                    {% elif user.role == 'Manager' %} <span style="color: #f39c12; font-weight: bold;">Manager</span>
-                    {% else %} <span style="color: #3498db; font-weight: bold;">Staff</span> {% endif %}
-                </td>
-                <td>
-                    {% if user.is_suspended %} <span style="background: #e74c3c; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Suspended</span>
-                    {% else %} <span style="background: #2ecc71; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">Active</span> {% endif %}
-                </td>
-                <td>
-                    {% if user.id != g.user.id %}
-                        <div style="display: flex; gap: 5px;">
-                            <a href="{{ url_for('edit_admin', user_id=user.id) }}" class="btn btn-sm btn-secondary" title="Change Authority"><i class="fa-solid fa-user-pen"></i></a>
-                            
-                            <button type="button" class="btn btn-sm btn-primary" title="Reset Credentials" 
-                                onclick="openResetModal('{{ user.id }}', '{{ user.username }}', '{{ user.email if user.email else '' }}')">
-                                <i class="fa-solid fa-key"></i>
-                            </button>
-                            
-                            <form action="{{ url_for('suspend_admin', user_id=user.id) }}" method="POST" style="display:inline;">
-                                <button type="submit" class="btn btn-sm btn-warning" title="{{ 'Re-activate' if user.is_suspended else 'Suspend' }}">
-                                    <i class="fa-solid {{ 'fa-check' if user.is_suspended else 'fa-ban' }}"></i>
-                                </button>
-                            </form>
-                            
-                            {% if user.role != 'SuperAdmin' %}
-                            <button type="button" class="btn btn-sm btn-danger" title="Delete" onclick="openDeleteModal('{{ user.id }}', '{{ user.username }}')">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                            {% endif %}
-                        </div>
+                    {% if user.password.startswith('scrypt:') %}
+                        <span style="font-size: 11px; color: #999;">[Encrypted]</span>
                     {% else %}
-                        <span style="color: #aaa;">(Current)</span>
+                        <span class="password-mask">{{ user.password }}</span>
                     {% endif %}
+                </td>
+                {% endif %}
+                
+                <td>
+                    <div class="action-row">
+                        <a href="{{ url_for('edit_admin', user_id=user.id) }}" class="btn-icon btn-edit" title="Edit Staff">
+                            <i class="fa-solid fa-pen"></i>
+                        </a>
+
+                        <button type="button" class="btn-icon btn-reset" title="Reset Credentials" 
+                            onclick="openResetModal('{{ user.id }}', '{{ user.username }}', '{{ user.email if user.email else '' }}')">
+                            <i class="fa-solid fa-key"></i>
+                        </button>
+                        
+                        {% if user.id != session.user_id %}
+                        <form action="{{ url_for('suspend_admin', user_id=user.id) }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn-icon btn-suspend" title="{{ 'Unsuspend' if user.is_suspended else 'Suspend' }}">
+                                <i class="fa-solid {{ 'fa-check' if user.is_suspended else 'fa-ban' }}"></i>
+                            </button>
+                        </form>
+                        
+                        <button type="button" class="btn-icon btn-delete" title="Delete Staff" onclick="openDeleteModal('{{ user.id }}', '{{ user.username }}')">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                        {% endif %}
+                    </div>
                 </td>
             </tr>
             {% else %}
-            <tr><td colspan="{{ 7 if show_passwords else 6 }}">No users found.</td></tr>
+            <tr><td colspan="6" style="text-align: center; padding: 20px; color: #999;">No staff members found.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="panel-section">
+    <div class="section-header">
+        <div class="section-title">
+            <i class="fa-solid fa-users"></i> Customer Database
+        </div>
+    </div>
+
+    <table class="user-table">
+        <thead>
+            <tr>
+                <th>Customer ID</th>
+                <th>Name</th>
+                <th>Email / Contact</th>
+                <th>Verified</th>
+                <th>Status</th>
+                <th style="text-align: right;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in customer_users %}
+            <tr>
+                <td><span style="font-family: monospace; color: #666;">{{ user.custom_id }}</span></td>
+                <td>
+                    {% if user.first_name %}
+                        <strong>{{ user.first_name }} {{ user.last_name }}</strong>
+                    {% else %}
+                        <span style="color: #999;">(No Name)</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div>{{ user.email }}</div>
+                    {% if user.phone %}<div style="font-size: 11px; color: #666;">{{ user.phone }}</div>{% endif %}
+                </td>
+                <td>
+                    {% if user.is_verified %}
+                        <i class="fa-solid fa-circle-check verified-check" title="Verified"></i>
+                    {% else %}
+                        <i class="fa-solid fa-circle-xmark unverified-cross" title="Unverified"></i>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if user.is_suspended %}
+                        <span style="color: #dc2626; font-size: 12px; font-weight: 700;">Suspended</span>
+                    {% else %}
+                        <span style="color: #166534; font-size: 12px; font-weight: 700;">Active</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="action-row">
+                        <form action="{{ url_for('suspend_admin', user_id=user.id) }}" method="POST" style="display:inline;">
+                            <button type="submit" class="btn-icon btn-suspend" title="{{ 'Unsuspend' if user.is_suspended else 'Suspend' }}">
+                                <i class="fa-solid {{ 'fa-check' if user.is_suspended else 'fa-ban' }}"></i>
+                            </button>
+                        </form>
+                        
+                        <button type="button" class="btn-icon btn-delete" title="Delete Customer" onclick="openDeleteModal('{{ user.id }}', '{{ user.username or user.email }}')">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" style="text-align: center; padding: 20px; color: #999;">No customers registered yet.</td></tr>
             {% endfor %}
         </tbody>
     </table>
@@ -119,7 +207,7 @@
 
 <div id="deleteModal" class="modal-overlay">
     <div class="modal-content">
-        <div class="modal-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="modal-icon" style="color: #e74c3c;"><i class="fa-solid fa-triangle-exclamation"></i></div>
         <h3>Delete User?</h3>
         <p>Are you sure you want to delete <strong id="deleteUsername">User</strong>?</p>
         <p style="font-size: 12px; color: #7f8c8d;">This action cannot be undone.</p>
@@ -152,6 +240,17 @@
             </label>
             <input type="text" id="tempPasswordInput" name="temp_password" class="modal-input" required>
 
+            <label class="modal-label" style="margin-top: 15px; color: #e67e22;">Admin Verification (OTP)</label>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" name="admin_otp" class="modal-input" placeholder="Check your email" required style="margin-bottom: 0;">
+                <button type="button" class="btn-confirm-reset" style="background: #f39c12; width: auto; white-space: nowrap; font-size: 12px;" onclick="sendAdminOTP(this)">
+                    Get OTP
+                </button>
+            </div>
+            <div id="otpMessage" style="font-size: 11px; color: green; margin-top: 5px; display: none;">
+                <i class="fa-solid fa-check"></i> OTP Sent to your email.
+            </div>
+
             <div class="modal-actions">
                 <button type="button" class="btn-cancel" onclick="closeResetModal()">Cancel</button>
                 <button type="submit" class="btn-confirm-reset">Update User</button>
@@ -176,6 +275,8 @@
         document.getElementById('resetEmailInput').value = (email && email !== 'None') ? email : '';
         document.getElementById('resetForm').action = "/admin/reset_password/" + userId;
         document.getElementById('resetModal').style.display = 'flex';
+        const msg = document.getElementById('otpMessage');
+        if(msg) msg.style.display = 'none';
     }
     function closeResetModal() { document.getElementById('resetModal').style.display = 'none'; }
 
@@ -191,6 +292,41 @@
         let password = "";
         for (let i = 0; i < 12; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
         document.getElementById('tempPasswordInput').value = password;
+    }
+
+    // Send Admin OTP
+    function sendAdminOTP(btn) {
+        const originalText = btn.innerText;
+        btn.innerText = "Sending...";
+        btn.disabled = true;
+        
+        fetch('/admin/send_action_otp', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                document.getElementById('otpMessage').style.display = 'block';
+                btn.innerText = "Sent";
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }, 30000); 
+            } else {
+                alert("Error sending OTP: " + data.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Failed to send request.");
+            btn.innerText = originalText;
+            btn.disabled = false;
+        });
     }
 </script>
 

@@ -1,0 +1,184 @@
+{% extends "store_base.html" %}
+
+{% block title %}Contact Us | Shop.co{% endblock %}
+
+{% block content %}
+
+<style>
+    .contact-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 80vh;
+    }
+    
+    /* LEFT SIDE: INFO */
+    .contact-info {
+        background: #111;
+        color: white;
+        padding: 80px 60px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .contact-info h1 {
+        font-size: 42px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        margin-bottom: 20px;
+    }
+    .contact-info p {
+        color: #aaa;
+        font-size: 16px;
+        line-height: 1.6;
+        margin-bottom: 40px;
+        max-width: 400px;
+    }
+    
+    .info-item {
+        margin-bottom: 30px;
+    }
+    .info-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #666;
+        letter-spacing: 1px;
+        margin-bottom: 5px;
+    }
+    .info-value {
+        font-size: 18px;
+        font-weight: 500;
+    }
+    .info-value a {
+        border-bottom: 1px solid rgba(255,255,255,0.3);
+    }
+    .info-value a:hover {
+        border-color: white;
+    }
+
+    /* RIGHT SIDE: FORM */
+    .contact-form-section {
+        background: white;
+        padding: 80px 60px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .form-group {
+        margin-bottom: 25px;
+    }
+    .form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #333;
+    }
+    .form-input, .form-textarea {
+        width: 100%;
+        padding: 15px 0;
+        border: none;
+        border-bottom: 1px solid #e5e5e5;
+        font-family: var(--font-main);
+        font-size: 15px;
+        outline: none;
+        transition: 0.2s;
+        box-sizing: border-box;
+    }
+    .form-input:focus, .form-textarea:focus {
+        border-color: #000;
+    }
+    .form-textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+    
+    .btn-submit {
+        background: black;
+        color: white;
+        border: none;
+        padding: 18px 40px;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: 0.2s;
+        margin-top: 20px;
+        align-self: flex-start;
+    }
+    .btn-submit:hover {
+        opacity: 0.8;
+    }
+
+    @media (max-width: 900px) {
+        .contact-wrapper { grid-template-columns: 1fr; }
+        .contact-info, .contact-form-section { padding: 60px 30px; }
+    }
+</style>
+
+<div class="contact-wrapper">
+    <div class="contact-info">
+        <h1>Get in Touch.</h1>
+        <p>We’re here to help. Whether you have a question about an order, a product, or just want to say hello.</p>
+        
+        <div class="info-item">
+            <div class="info-label">Customer Support</div>
+            <div class="info-value"><a href="mailto:support@shop.co">support@shop.co</a></div>
+        </div>
+        
+        <div class="info-item">
+            <div class="info-label">Press Inquiries</div>
+            <div class="info-value"><a href="mailto:press@shop.co">press@shop.co</a></div>
+        </div>
+        
+        <div class="info-item">
+            <div class="info-label">Visit Us</div>
+            <div class="info-value">
+                88 Orchard Road, #05-12<br>
+                Singapore 238888
+            </div>
+        </div>
+        
+        <div class="info-item" style="margin-top: 40px;">
+            <div class="social-links" style="gap: 20px;">
+                <a href="#" style="color: white; font-size: 20px;"><i class="fa-brands fa-instagram"></i></a>
+                <a href="#" style="color: white; font-size: 20px;"><i class="fa-brands fa-twitter"></i></a>
+                <a href="#" style="color: white; font-size: 20px;"><i class="fa-brands fa-linkedin"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <div class="contact-form-section">
+        <form method="POST">
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" name="name" class="form-input" placeholder="Your full name" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-input" placeholder="Your email address" required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Subject</label>
+                <select name="subject" class="form-input" style="background: white;">
+                    <option value="Order Status">Order Status</option>
+                    <option value="Product Inquiry">Product Inquiry</option>
+                    <option value="Return/Exchange">Return / Exchange</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Message</label>
+                <textarea name="message" class="form-textarea" placeholder="How can we help you?" required></textarea>
+            </div>
+            
+            <button type="submit" class="btn-submit">Send Message</button>
+        </form>
+    </div>
+</div>
+
+{% endblock %}

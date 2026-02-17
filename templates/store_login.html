@@ -1,26 +1,33 @@
 {% extends "store_base.html" %}
 {% block content %}
 <style>
-    .auth-wrapper { min-height: 70vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+    .auth-wrapper { min-height: 80vh; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
     .auth-card { width: 100%; max-width: 400px; text-align: center; }
-    .auth-title { font-size: 26px; font-weight: 800; margin-bottom: 30px; letter-spacing: -0.5px; }
-    .form-input { width: 100%; padding: 16px; border: 1px solid #e5e5e5; border-radius: 8px; font-size: 16px; outline: none; transition: 0.2s; box-sizing: border-box; margin-bottom: 15px; }
+    .form-input { width: 100%; padding: 14px; border: 1px solid #e5e5e5; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 15px; box-sizing: border-box; }
     .form-input:focus { border-color: black; }
-    .btn-auth { width: 100%; background: black; color: white; padding: 16px; font-size: 14px; font-weight: 700; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+    .btn-auth { width: 100%; background: black; color: white; padding: 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 700; }
+    .btn-auth:hover { opacity: 0.9; }
+    
+    .link-group { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+    .link-group a { color: #555; text-decoration: none; font-weight: 600; }
+    .link-group a:hover { color: black; text-decoration: underline; }
 </style>
 
 <div class="auth-wrapper">
     <div class="auth-card">
-        <h1 class="auth-title">Welcome Back</h1>
-        
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 5px;">Enter Password</h2>
+        <p style="color: #666; font-size: 14px; margin-bottom: 30px;">for <strong>{{ email }}</strong></p>
+
         <form method="POST">
-            <input type="email" name="email" class="form-input" placeholder="Email Address" value="{{ email if email else '' }}" required autofocus>
-            <input type="password" name="password" class="form-input" placeholder="Password" required>
-            <button type="submit" class="btn-auth">Sign In</button>
+            <input type="password" name="password" class="form-input" placeholder="Your Password" required autofocus>
+            <button type="submit" class="btn-auth">LOG IN</button>
         </form>
-        
-        <div style="margin-top: 20px; font-size: 13px;">
-            <a href="{{ url_for('store_auth') }}" style="color: #666; text-decoration: underline;">Use OTP Login instead</a>
+
+        <div class="link-group">
+            <a href="{{ url_for('store_forgot_password') }}" style="color: #dc2626;">Forgot Password?</a>
+            <span style="color: #ddd;">— OR —</span>
+            <a href="{{ url_for('store_initiate_otp') }}">Log in with One-Time Code</a>
+            <a href="{{ url_for('store_login_options') }}" style="color: #999; margin-top: 10px; font-weight: 400;">Go Back</a>
         </div>
     </div>
 </div>
