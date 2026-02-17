@@ -409,6 +409,27 @@ class Review(db.Model):
 # ==============================================================================
 # SECTION 5: HELPER FUNCTIONS
 # ==============================================================================
+def is_password_strong(password):
+    """
+    Validates that a password meets security requirements:
+    - At least 8 characters
+    - At least one uppercase letter
+    - At least one lowercase letter
+    - At least one number
+    - At least one special character
+    """
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long."
+    if not re.search(r"[A-Z]", password):
+        return False, "Password must contain at least one uppercase letter."
+    if not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter."
+    if not re.search(r"\d", password):
+        return False, "Password must contain at least one number."
+    if not re.search(r"[ !@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?]", password):
+        return False, "Password must contain at least one special character."
+    return True, "Strong password"
+
 def log_action(actor_type, actor_id, action, entity_type, entity_id, status, description):
     try:
         log = AuditLog(actor_type=actor_type, actor_id=actor_id, action=action, entity_type=entity_type, entity_id=entity_id, status=status, description=description)
@@ -596,19 +617,18 @@ def chat_bot():
         data = request.json
         user_msg = data.get('message')
         
-        # CONFIGURE API KEY HERE (Replace with your actual key or use os.environ)
-        # For security, best to use: os.environ.get('GEMINI_API_KEY')
-        # ---------------------------------------------------------
-        # SECURELY LOAD API KEY
-        # ---------------------------------------------------------
+        # 1. Securely Load API Key
         api_key = os.environ.get('GEMINI_API_KEY')
         
-        if 'PASTE_YOUR' in api_key:
-            return jsonify({'status': 'error', 'reply': "System Error: API Key not configured."})
+        # FIX: Handle NoneType (missing key) and Placeholder text securely
+        if not api_key or 'PASTE_YOUR' in api_key:
+            print("Error: GEMINI_API_KEY is missing or invalid.")
+            return jsonify({'status': 'error', 'reply': "System Error: AI service is currently unconfigured."})
 
+        # 2. Configure Gemini
         genai.configure(api_key=api_key)
         
-        # PREMIUM PERSONA SETTINGS
+        # 3. Define System Instruction
         system_instruction = """
         You are the AI Concierge for Shop.co, a high-end fashion retailer.
         Your Persona: Professional, polite, concise, and helpful. You speak with an elegant tone.
@@ -625,19 +645,24 @@ def chat_bot():
         - Do not hallucinate order statuses. Ask them to check their Profile page.
         """
         
-        # Initialize Model
+        # 4. Generate Response
         model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_instruction)
         chat = model.start_chat(history=[])
         response = chat.send_message(user_msg)
         
-        # formatting simple markdown to html if needed, or sending raw text
-        reply_text = response.text.replace('**', '') # Simple cleanup
+        # 5. Format Output (Simple cleanup)
+        reply_text = response.text.replace('**', '') 
         
         return jsonify({'status': 'success', 'reply': reply_text})
         
     except Exception as e:
-        print(f"AI Error: {str(e)}")
-        return jsonify({'status': 'error', 'reply': "I apologize, but our concierge service is momentarily unavailable. Please contact support@shop.co."})
+        # detailed logging for debugging
+        print(f"AI Chatbot Error: {str(e)}")
+        # Check if it's a specific Google API error
+        if "400" in str(e) or "API key" in str(e):
+            return jsonify({'status': 'error', 'reply': "Configuration Error: Invalid API Key."})
+            
+        return jsonify({'status': 'error', 'reply': "I apologize, but our concierge service is momentarily unavailable."})
     
 # --- AUTHENTICATION FLOW ---
 
@@ -1903,42 +1928,136 @@ def login():
             
     return render_template('login.html')
 
+# ==============================================================================
+# UPDATED DASHBOARD ROUTE (With CSAT & Cancellation Metrics)
+# ==============================================================================
+# ==============================================================================
+# NEW API: DYNAMIC REVENUE DATA (Daily, Weekly, Monthly, Yearly)
+# ==============================================================================
+@app.route('/api/revenue-trends')
+def revenue_trends():
+    if not g.user or g.user.role == 'Customer': 
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    period = request.args.get('period', 'monthly') # daily, weekly, monthly, yearly
+    
+    # SQLite Date Formatting
+    if period == 'daily':
+        date_fmt = '%Y-%m-%d'
+    elif period == 'weekly':
+        date_fmt = '%Y-%W'
+    elif period == 'yearly':
+        date_fmt = '%Y'
+    else: # monthly (default)
+        date_fmt = '%Y-%m'
+
+    # Query: Sum Amount Grouped by Date Format
+    data = db.session.query(
+        func.strftime(date_fmt, Invoice.date_created).label('date_group'),
+        func.sum(Invoice.amount).label('total')
+    ).filter(
+        Invoice.status == 'Paid'
+    ).group_by(
+        'date_group'
+    ).order_by(
+        'date_group'
+    ).all()
+
+    # Format for Chart.js
+    labels = [row.date_group for row in data]
+    values = [row.total for row in data]
+
+    return jsonify({'labels': labels, 'values': values})
 @app.route('/dashboard')
 def dashboard():
-    if not g.user or g.user.role == 'Customer': return redirect(url_for('login'))
-    total_orders=0; total_sales="0"; products_sold=0; new_customers=0
-    order_growth=0; sales_growth=0; product_growth=0; customer_growth=0
-    ytd_sales="0"; ytd_sales_growth="0"; ytd_pos=True
-    ytd_count="0"; ytd_count_growth="0"; ytd_count_pos=True
-    mtd_sales="0"; mtd_sales_diff="0"; mtd_pos=True
-    mtd_count=0; mtd_count_diff=0; mtd_count_pos=True
-    chart_invoice_reality = [0] * 12
-    chart_invoice_target = get_sales_targets()
-    chart_orders_ytd_pct = [50, 50]; chart_orders_mtd_pct = [50, 50]
-    top_clients_progress = []; chart_vol_service_labels = []; chart_vol_data = []; chart_service_data = []
-    chart_sat_labels = []; chart_sat_data = []
-    try:
-        total_orders = Order.query.count()
-        total_sales = db.session.query(func.sum(Invoice.amount)).scalar() or 0
-        products_sold = Invoice.query.filter_by(status='Paid').count()
-        new_customers = Client.query.count()
-    except Exception: pass
+    if not g.user or g.user.role == 'Customer': 
+        return redirect(url_for('login'))
+
+    # --- DATE SETUP ---
+    now = datetime.now()
+    curr_month = now.month
+    curr_year = now.year
+    last_month_date = now.replace(day=1) - timedelta(days=1)
+    last_month = last_month_date.month
+    last_year = last_month_date.year
+
+    # --- KPI 1: TOTAL REVENUE ---
+    total_revenue = db.session.query(func.sum(Invoice.amount)).filter(Invoice.status == 'Paid').scalar() or 0
     
+    # Revenue Growth
+    rev_this_month = db.session.query(func.sum(Invoice.amount)).filter(
+        Invoice.status == 'Paid', extract('month', Invoice.date_created) == curr_month, extract('year', Invoice.date_created) == curr_year
+    ).scalar() or 0
+    rev_last_month = db.session.query(func.sum(Invoice.amount)).filter(
+        Invoice.status == 'Paid', extract('month', Invoice.date_created) == last_month, extract('year', Invoice.date_created) == last_year
+    ).scalar() or 0
+    
+    revenue_growth = 0
+    if rev_last_month > 0:
+        revenue_growth = ((rev_this_month - rev_last_month) / rev_last_month) * 100
+
+    # --- KPI 2: TOTAL ORDERS ---
+    total_orders = Order.query.count()
+    
+    # Orders Growth
+    orders_this_month = Order.query.filter(extract('month', Order.date_placed) == curr_month, extract('year', Order.date_placed) == curr_year).count()
+    orders_last_month = Order.query.filter(extract('month', Order.date_placed) == last_month, extract('year', Order.date_placed) == last_year).count()
+    
+    order_growth = 0
+    if orders_last_month > 0:
+        order_growth = ((orders_this_month - orders_last_month) / orders_last_month) * 100
+
+    # --- KPI 3: ACTIVE CUSTOMERS ---
+    total_customers = User.query.filter_by(role='Customer', is_suspended=False).count()
+
+    # --- KPI 4: AVERAGE ORDER VALUE (AOV) ---
+    paid_invoice_count = Invoice.query.filter(Invoice.status == 'Paid').count()
+    aov = (total_revenue / paid_invoice_count) if paid_invoice_count > 0 else 0
+
+    # --- KPI 5: CUSTOMER SATISFACTION (CSAT) ---
+    # Average of Review.rating (1-5 stars)
+    avg_rating = db.session.query(func.avg(Review.rating)).scalar() or 0
+    csat_score = round(avg_rating, 1)
+
+    # --- KPI 6: CANCELLATION RATE ---
+    # Percentage of orders marked as 'Cancelled'
+    cancelled_count = Order.query.filter_by(status='Cancelled').count()
+    cancel_rate = 0
+    if total_orders > 0:
+        cancel_rate = (cancelled_count / total_orders) * 100
+
+    # --- CHART DATA ---
+    monthly_data = db.session.query(
+        extract('month', Invoice.date_created).label('month'), func.sum(Invoice.amount).label('total')
+    ).filter(Invoice.status == 'Paid', extract('year', Invoice.date_created) == curr_year).group_by('month').all()
+
+    chart_invoice_reality = [0] * 12
+    for item in monthly_data:
+        chart_invoice_reality[int(item.month) - 1] = item.total
+
+    chart_invoice_target = get_sales_targets()
+
+    # --- CATEGORY DATA ---
+    category_data = db.session.query(Product.category, func.sum(Product.sales_count * Product.price).label('rev')).group_by(Product.category).all()
+    chart_cat_labels = [row.category for row in category_data if row.category]
+    chart_cat_data = [row.rev for row in category_data if row.category]
+
+    # --- TABLES ---
+    top_products = Product.query.order_by(Product.sales_count.desc()).limit(5).all()
+    recent_orders = Order.query.order_by(Order.date_placed.desc()).limit(6).all()
+
     return render_template('dashboard.html',
-        total_orders=format_k(total_orders), order_growth=order_growth,
-        total_sales=format_k(total_sales), sales_growth=sales_growth,
-        products_sold=products_sold, product_growth=product_growth,
-        new_customers=new_customers, customer_growth=customer_growth,
-        ytd_sales=ytd_sales, ytd_sales_growth=ytd_sales_growth, ytd_pos=ytd_pos,
-        ytd_count=ytd_count, ytd_count_growth=ytd_count_growth, ytd_count_pos=ytd_count_pos,
-        mtd_sales=mtd_sales, mtd_sales_diff=mtd_sales_diff, mtd_pos=mtd_pos,
-        mtd_count=mtd_count, mtd_count_diff=mtd_count_diff, mtd_count_pos=mtd_count_pos,
+        total_revenue=format_k(total_revenue), revenue_growth=revenue_growth,
+        total_orders=total_orders, order_growth=order_growth,
+        total_customers=total_customers,
+        aov=format_k(aov),
+        csat_score=csat_score,   # <--- NEW
+        cancel_rate=cancel_rate, # <--- NEW
+        
         chart_invoice_months=['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
         chart_invoice_reality=chart_invoice_reality, chart_invoice_target=chart_invoice_target,
-        chart_orders_ytd_pct=chart_orders_ytd_pct, chart_orders_mtd_pct=chart_orders_mtd_pct,
-        top_clients_progress=top_clients_progress,
-        chart_vol_service_labels=chart_vol_service_labels, chart_vol_data=chart_vol_data, chart_service_data=chart_service_data,
-        chart_sat_labels=chart_sat_labels, chart_sat_data=chart_sat_data
+        chart_cat_labels=chart_cat_labels, chart_cat_data=chart_cat_data,
+        top_products=top_products, recent_orders=recent_orders
     )
 
 @app.route('/update_targets', methods=['POST'])

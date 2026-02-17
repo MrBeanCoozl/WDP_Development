@@ -432,29 +432,38 @@
         </div>
         
         <div class="chat-footer">
-            <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." onkeypress="handleEnter(event)">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." onkeydown="handleEnter(event)">
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">
                 <i class="fa-solid fa-paper-plane" style="font-size: 12px;"></i>
             </button>
         </div>
     </div>
 
-    <script>
-        // Use classes for animation state management
+<script>
+        // --- UI TOGGLE LOGIC ---
         function toggleChat() {
             const win = document.getElementById('chatWindow');
             const btn = document.getElementById('widgetBtn');
             
             win.classList.toggle('active');
             
-            // Optional: Animate button icon change (could replace innerHTML if desired)
+            // Focus input when opening
             if(win.classList.contains('active')) {
-                document.getElementById('chatInput').focus();
+                // Small delay to ensure transition finishes or element is visible
+                setTimeout(() => {
+                    const input = document.getElementById('chatInput');
+                    if(input) input.focus();
+                }, 100);
             }
         }
 
+        // --- INPUT HANDLING ---
         function handleEnter(e) {
-            if (e.key === 'Enter') sendMessage();
+            // Using onkeydown allows us to prevent the default newline/submit behavior
+            if (e.key === 'Enter') {
+                e.preventDefault(); 
+                sendMessage();
+            }
         }
 
         function sendSuggestion(text) {
@@ -463,6 +472,7 @@
             sendMessage();
         }
 
+        // --- MESSAGE CREATION ---
         function createMessageElement(html, isUser) {
             const div = document.createElement('div');
             div.className = `message ${isUser ? 'user-msg' : 'bot-msg'}`;
@@ -470,6 +480,7 @@
             return div;
         }
 
+        // --- CORE SEND LOGIC ---
         function sendMessage() {
             const input = document.getElementById('chatInput');
             const btn = document.getElementById('sendBtn');
@@ -479,15 +490,15 @@
 
             if (!msg) return;
 
-            // 1. Append User Message (Using appendChild for smooth animation)
+            // 1. Append User Message
             body.insertBefore(createMessageElement(escapeHtml(msg), true), typing);
-            input.value = '';
+            input.value = ''; // Clear input immediately
             body.scrollTop = body.scrollHeight;
 
-            // 2. Show Typing Indicator
+            // 2. Lock Interface & Show Typing
             typing.style.display = 'block';
             body.scrollTop = body.scrollHeight;
-            input.disabled = true;
+            input.disabled = true; 
             btn.disabled = true;
 
             // 3. Send to Backend
@@ -501,30 +512,38 @@
                 // Hide Typing
                 typing.style.display = 'none';
                 
-                // 4. Append Bot Message
+                // 4. Append Bot Response
                 let replyContent = '';
                 if (data.status === 'success') {
                     replyContent = formatLinks(data.reply);
                 } else {
+                    // Display backend error in red
                     replyContent = `<span style="color:#e74c3c">${data.reply}</span>`;
                 }
                 
                 body.insertBefore(createMessageElement(replyContent, false), typing);
                 
-                // Re-enable inputs
+                // 5. Unlock Interface
                 body.scrollTop = body.scrollHeight;
                 input.disabled = false;
                 btn.disabled = false;
-                input.focus();
+                input.focus(); // Focus back on input
             })
             .catch(err => {
+                console.error("Chat Error:", err);
+                
+                // Handle Network/Connection Errors
                 typing.style.display = 'none';
                 body.insertBefore(createMessageElement("Connection error. Please try again.", false), typing);
+                
+                // Unlock Interface even on error
                 input.disabled = false;
                 btn.disabled = false;
+                input.focus();
             });
         }
 
+        // --- UTILITIES ---
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -532,9 +551,10 @@
         }
         
         function formatLinks(text) {
-            // Convert bold and links
+            // 1. Bold text: **text** -> <b>text</b>
             let formatted = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-            // Basic URL to Link converter
+            
+            // 2. Convert URLs to clickable links
             formatted = formatted.replace(
                 /(https?:\/\/[^\s]+)/g, 
                 '<a href="$1" target="_blank" style="color:#000; text-decoration:underline;">$1</a>'
