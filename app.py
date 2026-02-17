@@ -19,6 +19,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, session, g, jsonify
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
@@ -571,6 +572,57 @@ def store_contact():
         return redirect(url_for('store_contact'))
         
     return render_template('store_contact.html')
+
+# --- AI CHATBOT ROUTE ---
+@app.route('/api/chat', methods=['POST'])
+def chat_bot():
+    try:
+        data = request.json
+        user_msg = data.get('message')
+        
+        # CONFIGURE API KEY HERE (Replace with your actual key or use os.environ)
+        # For security, best to use: os.environ.get('GEMINI_API_KEY')
+        # ---------------------------------------------------------
+        # SECURELY LOAD API KEY
+        # ---------------------------------------------------------
+        api_key = os.environ.get('GEMINI_API_KEY')
+        
+        if 'PASTE_YOUR' in api_key:
+            return jsonify({'status': 'error', 'reply': "System Error: API Key not configured."})
+
+        genai.configure(api_key=api_key)
+        
+        # PREMIUM PERSONA SETTINGS
+        system_instruction = """
+        You are the AI Concierge for Shop.co, a high-end fashion retailer.
+        Your Persona: Professional, polite, concise, and helpful. You speak with an elegant tone.
+        
+        Key Information:
+        - Shipping: Free worldwide shipping on orders over $150.
+        - Returns: We accept returns within 30 days of purchase for unworn items.
+        - Location: 88 Orchard Road, Singapore.
+        - Contact: support@shop.co for complex issues.
+        
+        Guidelines:
+        - Keep answers short (under 3 sentences) unless asked for details.
+        - If asked about specific stock/inventory, apologize and direct them to the 'Shop' page.
+        - Do not hallucinate order statuses. Ask them to check their Profile page.
+        """
+        
+        # Initialize Model
+        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_instruction)
+        chat = model.start_chat(history=[])
+        response = chat.send_message(user_msg)
+        
+        # formatting simple markdown to html if needed, or sending raw text
+        reply_text = response.text.replace('**', '') # Simple cleanup
+        
+        return jsonify({'status': 'success', 'reply': reply_text})
+        
+    except Exception as e:
+        print(f"AI Error: {str(e)}")
+        return jsonify({'status': 'error', 'reply': "I apologize, but our concierge service is momentarily unavailable. Please contact support@shop.co."})
+    
 # --- AUTHENTICATION FLOW ---
 
 # --- AUTH FLOW UPDATES ---

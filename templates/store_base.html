@@ -115,6 +115,161 @@
 
         @media (max-width: 1100px) { .nav-center { position: relative; left: auto; transform: none; margin: 0 20px; } .search-bar { width: 150px; } }
         @media (max-width: 900px) { .store-nav { padding: 0 20px; } .nav-center, .search-wrapper { display: none; } .footer-grid { grid-template-columns: 1fr 1fr; gap: 30px; } .footer-brand, .newsletter-col { grid-column: span 2; } .footer-bottom { flex-direction: column; gap: 15px; } }
+
+  /* --- ANIMATIONS --- */
+        @keyframes slideInUp {
+            0% { opacity: 0; transform: translateY(15px) scale(0.96); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+            50% { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
+            100% { box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+        }
+
+        /* --- WIDGET BUTTON --- */
+        .chat-widget-btn {
+            position: fixed; bottom: 30px; right: 30px;
+            width: 60px; height: 60px;
+            background: #111; color: white;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 9999;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            animation: pulse 3s infinite ease-in-out;
+        }
+        .chat-widget-btn:hover { transform: scale(1.1) rotate(-5deg); }
+        .chat-widget-btn i { transition: transform 0.3s; }
+        .chat-widget-btn.open i { transform: rotate(90deg); opacity: 0; } /* Icon switch logic */
+
+        /* --- WINDOW CONTAINER --- */
+        .chat-window {
+            display: flex; flex-direction: column;
+            position: fixed; bottom: 100px; right: 30px;
+            width: 380px; height: 550px;
+            background: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            z-index: 9999;
+            overflow: hidden;
+            border: 1px solid rgba(0,0,0,0.05);
+            
+            /* Animation State: Closed */
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            pointer-events: none;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        /* Animation State: Open */
+        .chat-window.active {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: all;
+        }
+
+        /* --- HEADER --- */
+        .chat-header {
+            background: #111; color: white;
+            padding: 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            font-size: 15px; font-weight: 600; letter-spacing: 0.5px;
+        }
+        .close-chat { cursor: pointer; opacity: 0.6; transition: 0.2s; }
+        .close-chat:hover { opacity: 1; transform: rotate(90deg); }
+
+        /* --- BODY --- */
+        .chat-body {
+            flex: 1; padding: 20px;
+            overflow-y: auto;
+            background: #fff;
+            display: flex; flex-direction: column; gap: 12px;
+            scroll-behavior: smooth;
+        }
+        /* Custom Scrollbar */
+        .chat-body::-webkit-scrollbar { width: 6px; }
+        .chat-body::-webkit-scrollbar-track { background: transparent; }
+        .chat-body::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 3px; }
+
+        /* --- BUBBLES --- */
+        .message {
+            max-width: 80%; padding: 12px 16px;
+            font-size: 13px; line-height: 1.5;
+            border-radius: 14px;
+            position: relative;
+            
+            /* Apply Animation */
+            animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .bot-msg { 
+            align-self: flex-start; 
+            background: #f4f4f5; color: #111; 
+            border-bottom-left-radius: 4px;
+        }
+        .user-msg { 
+            align-self: flex-end; 
+            background: #111; color: white; 
+            border-bottom-right-radius: 4px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        /* --- SUGGESTIONS --- */
+        .suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; animation: slideInUp 0.5s ease forwards; }
+        .chip {
+            font-size: 11px; font-weight: 600;
+            background: white; border: 1px solid #e5e5e5;
+            padding: 8px 14px; border-radius: 20px;
+            cursor: pointer; transition: all 0.2s;
+            color: #555;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .chip:hover { 
+            background: #111; color: white; border-color: #111; 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        /* --- FOOTER --- */
+        .chat-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #f0f0f0;
+            display: flex; align-items: center; gap: 12px;
+            background: white;
+        }
+        .chat-input {
+            flex: 1; border: none; outline: none;
+            font-size: 14px; font-family: 'Inter', sans-serif;
+            background: #f9f9f9; padding: 10px 15px; border-radius: 8px;
+            transition: 0.2s;
+        }
+        .chat-input:focus { background: #fff; box-shadow: inset 0 0 0 1px #ddd; }
+        
+        .send-btn {
+            background: #111; border: none;
+            color: white; width: 36px; height: 36px;
+            border-radius: 50%;
+            cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .send-btn:hover { transform: scale(1.1); }
+        .send-btn:disabled { background: #eee; cursor: default; transform: none; }
+
+        /* --- LOADING DOTS --- */
+        .typing-indicator { 
+            display: none; align-self: flex-start; 
+            background: #f4f4f5; padding: 10px 16px; 
+            border-radius: 14px; margin-bottom: 10px;
+            border-bottom-left-radius: 4px;
+            animation: slideInUp 0.3s ease forwards;
+        }
+        .dot { height: 6px; width: 6px; background: #999; border-radius: 50%; display: inline-block; animation: bounce 1.4s infinite ease-in-out both; margin: 0 2px; }
+        .dot:nth-child(1) { animation-delay: -0.32s; }
+        .dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        
+        @media(max-width: 480px) {
+            .chat-window { width: 90%; right: 5%; bottom: 80px; height: 60vh; }
+        }
     </style>
 </head>
 <body>
@@ -245,5 +400,147 @@
             </div>
         </div>
     </footer>
+
+    <div class="chat-widget-btn" id="widgetBtn" onclick="toggleChat()">
+        <i class="fa-regular fa-comment-dots" style="font-size: 24px;"></i>
+    </div>
+
+    <div class="chat-window" id="chatWindow">
+        <div class="chat-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="width: 8px; height: 8px; background: #2ecc71; border-radius: 50%;"></div>
+                <span>Concierge</span>
+            </div>
+            <i class="fa-solid fa-xmark close-chat" onclick="toggleChat()"></i>
+        </div>
+        
+        <div class="chat-body" id="chatBody">
+            <div class="message bot-msg">
+                <b>Welcome to Shop.co.</b><br>
+                I am your personal AI concierge. I can assist you with:
+            </div>
+            
+            <div class="suggestions" id="initialSuggestions">
+                <div class="chip" onclick="sendSuggestion('Shipping Policy')">🚚 Shipping</div>
+                <div class="chip" onclick="sendSuggestion('Return Policy')">↺ Returns</div>
+                <div class="chip" onclick="sendSuggestion('Check Order Status')">📦 My Order</div>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+        
+        <div class="chat-footer">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Type a message..." onkeypress="handleEnter(event)">
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                <i class="fa-solid fa-paper-plane" style="font-size: 12px;"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Use classes for animation state management
+        function toggleChat() {
+            const win = document.getElementById('chatWindow');
+            const btn = document.getElementById('widgetBtn');
+            
+            win.classList.toggle('active');
+            
+            // Optional: Animate button icon change (could replace innerHTML if desired)
+            if(win.classList.contains('active')) {
+                document.getElementById('chatInput').focus();
+            }
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+
+        function sendSuggestion(text) {
+            const input = document.getElementById('chatInput');
+            input.value = text;
+            sendMessage();
+        }
+
+        function createMessageElement(html, isUser) {
+            const div = document.createElement('div');
+            div.className = `message ${isUser ? 'user-msg' : 'bot-msg'}`;
+            div.innerHTML = html;
+            return div;
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const btn = document.getElementById('sendBtn');
+            const body = document.getElementById('chatBody');
+            const typing = document.getElementById('typingIndicator');
+            const msg = input.value.trim();
+
+            if (!msg) return;
+
+            // 1. Append User Message (Using appendChild for smooth animation)
+            body.insertBefore(createMessageElement(escapeHtml(msg), true), typing);
+            input.value = '';
+            body.scrollTop = body.scrollHeight;
+
+            // 2. Show Typing Indicator
+            typing.style.display = 'block';
+            body.scrollTop = body.scrollHeight;
+            input.disabled = true;
+            btn.disabled = true;
+
+            // 3. Send to Backend
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            })
+            .then(res => res.json())
+            .then(data => {
+                // Hide Typing
+                typing.style.display = 'none';
+                
+                // 4. Append Bot Message
+                let replyContent = '';
+                if (data.status === 'success') {
+                    replyContent = formatLinks(data.reply);
+                } else {
+                    replyContent = `<span style="color:#e74c3c">${data.reply}</span>`;
+                }
+                
+                body.insertBefore(createMessageElement(replyContent, false), typing);
+                
+                // Re-enable inputs
+                body.scrollTop = body.scrollHeight;
+                input.disabled = false;
+                btn.disabled = false;
+                input.focus();
+            })
+            .catch(err => {
+                typing.style.display = 'none';
+                body.insertBefore(createMessageElement("Connection error. Please try again.", false), typing);
+                input.disabled = false;
+                btn.disabled = false;
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function formatLinks(text) {
+            // Convert bold and links
+            let formatted = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            // Basic URL to Link converter
+            formatted = formatted.replace(
+                /(https?:\/\/[^\s]+)/g, 
+                '<a href="$1" target="_blank" style="color:#000; text-decoration:underline;">$1</a>'
+            );
+            return formatted;
+        }
+    </script>
 </body>
 </html>
