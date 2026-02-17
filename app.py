@@ -49,7 +49,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # 4. Email Configuration
 app.config['SMTP_SERVER'] = 'smtp.gmail.com'
 app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'.strip()
-app.config['SMTP_PASSWORD'] = 'amyt ywtr yjds vqkc'.strip()
+app.config['SMTP_PASSWORD'] = 'amyt ywtr yjds vqkc'.replace(' ', '')
 
 # ==============================================================================
 # SECTION 3: OAUTH SETUP (GOOGLE & DISCORD)
@@ -217,56 +217,45 @@ def send_otp_email(user_email, otp_code):
         return False
 
 def send_temp_password_email(user_email, temp_password):
+    # 1. Load Credentials (Exactly like send_otp_email)
     sender_email = app.config.get('SMTP_EMAIL')
     sender_password = app.config.get('SMTP_PASSWORD')
     smtp_server = app.config.get('SMTP_SERVER')
 
+    # 2. Check for Missing Config (Dev Mode)
     if not sender_email or not sender_password: 
-        return False, "System Config Error: Missing Admin Email/Password."
+        print(f"\n[DEV MODE - RESET] To: {user_email} | TempPW: {temp_password}\n")
+        return True
 
+    # 3. Construct Email (HTML Format)
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = user_email
-    msg['Subject'] = "Security Notice: Temporary Password Reset"
-    body = f"Your temporary password is: {temp_password}\n\nPlease login and change it immediately."
-    msg.attach(MIMEText(body, 'plain'))
+    msg['Subject'] = "Security Update: Login Credentials Changed"
+    
+    body = f"""
+    <div style="font-family: Arial; padding: 20px; border: 1px solid #eee;">
+        <h2>Credentials Updated</h2>
+        <p>An administrator has manually reset your password.</p>
+        <p><strong>Your Temporary Password:</strong></p>
+        <h1 style="letter-spacing: 2px; background: #f4f4f4; padding: 10px; display: inline-block;">{temp_password}</h1>
+        <p>Please login and change this password immediately.</p>
+    </div>
+    """
+    msg.attach(MIMEText(body, 'html'))
 
+    # 4. Send Email (Standard Logic)
     try:
-        # 1. Try to Connect (with a 10-second timeout)
-        server = smtplib.SMTP(smtp_server, 587, timeout=10)
-        server.set_debuglevel(1) # Prints detailed logs to your terminal
+        server = smtplib.SMTP(smtp_server, 587)
         server.starttls()
-        
-        # 2. Try to Login
         server.login(sender_email, sender_password)
-        
-        # 3. Try to Send
         server.sendmail(sender_email, user_email, msg.as_string())
         server.quit()
-        return True, "Sent"
-
-    except (socket.timeout, TimeoutError) as e:
-        # This confirms the Firewall/ISP Blocking issue
-        return False, "TIMEOUT: Port 587 is blocked. Try a different network (like a hotspot)."
-        
-    except ConnectionRefusedError as e:
-        return False, "CONNECTION REFUSED: Server rejected the connection. Port blocked or Server down."
-        
-    except SMTPAuthenticationError as e:
-        return False, "AUTH ERROR: Google rejected the password. Ensure you are using the 16-char App Password."
-        
-    except SMTPConnectError as e:
-        return False, "CONNECT ERROR: Could not handshake with Gmail. Check internet connection."
-        
+        print(f"\n[SUCCESS] Password email sent to {user_email}\n")
+        return True
     except Exception as e:
-        # Catch-all for other weird errors
-        return False, f"UNKNOWN ERROR: {str(e)}"
-
-def is_password_strong(password):
-    if len(password) < 8: return False, "Password must be at least 8 characters."
-    if not re.search(r"[A-Z]", password): return False, "Password must contain an uppercase letter."
-    if not re.search(r"\d", password): return False, "Password must contain a number."
-    return True, "Valid"
+        print(f"\n[ERROR] Failed to send password email: {e}\n")
+        return False
 
 @app.before_request
 def load_user():
@@ -2299,11 +2288,28 @@ def edit_admin(user_id):
 @admin_required
 def delete_admin(user_id):
     try:
-        user = User.query.get(user_id)
+        user = User.query.get_or_404(user_id)
+        target_name = user.username  # Fix: Capture the name BEFORE deleting the object
+        
+        # 1. Clean up dependencies (Fixes Database Integrity Errors)
+        # If we don't delete these first, the database blocks the user deletion
+        PaymentMethod.query.filter_by(user_id=user.id).delete()
+        Review.query.filter_by(user_id=user.id).delete()
+        
+        # 2. Delete the User
         db.session.delete(user)
         db.session.commit()
+        
+        # 3. Log and Notify
         log_action('Admin', g.user.username, 'Delete User', 'User', target_name, 'Success', 'Deleted Account')
-    except: pass
+        flash(f"User {target_name} has been successfully deleted.", "success")
+        
+    except Exception as e:
+        db.session.rollback()
+        # Fix: Now we actually see the error if something goes wrong
+        flash(f"Error deleting user: {str(e)}", "danger")
+        print(f"Delete Error: {str(e)}")
+        
     return redirect(url_for('admin_panel'))
 
 @app.route('/logout')
@@ -2376,22 +2382,37 @@ def change_password():
 def reset_password(user_id):
     user = User.query.get_or_404(user_id)
     
-    # 1. Update Username and Email from the Modal
+    # 1. Capture Form Data
     new_username = request.form.get('new_username')
     new_email = request.form.get('new_email')
+    temp_password = request.form.get('temp_password')
     
+    # 2. Update User Record
     if new_username: user.username = new_username
     if new_email: user.email = new_email
     
-    # 2. Set Temporary Password (stored as plain text for first login)
-    user.password = request.form.get('temp_password')
-    
-    # 3. Force them to change it on next login
+    # Save the password (plain text for first login)
+    user.password = temp_password 
     user.must_change_password = True
     
     db.session.commit()
+    
+    # 3. Determine Recipient & Send Email
+    # Priority: Use the email just typed in the box. Fallback: Use the user's saved email.
+    recipient = new_email if new_email else user.email
+    
+    status_msg = ""
+    if recipient:
+        if send_temp_password_email(recipient, temp_password):
+            status_msg = f" Notification sent to {recipient}."
+        else:
+            status_msg = " (Warning: Email failed to send. Check server logs.)"
+    else:
+        status_msg = " (No email address available to send notification.)"
+
+    # 4. Log & Redirect
     log_action('Admin', g.user.username, 'Reset Password', 'User', user.username, 'Success', 'Admin reset credentials')
-    flash(f'Credentials updated for {user.username}. They will be required to change their password on next login.', 'success')
+    flash(f'Credentials updated for {user.username}.{status_msg}', 'success')
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin/suspend/<int:user_id>', methods=['POST'])
