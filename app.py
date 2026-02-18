@@ -411,24 +411,19 @@ class Review(db.Model):
 # ==============================================================================
 def is_password_strong(password):
     """
-    Validates that a password meets security requirements:
+    Requirements:
     - At least 8 characters
-    - At least one uppercase letter
-    - At least one lowercase letter
-    - At least one number
-    - At least one special character
+    - Uppercase letter
+    - Lowercase letter
+    - Number
+    - Special Character (Symbol)
     """
-    if len(password) < 8:
-        return False, "Password must be at least 8 characters long."
-    if not re.search(r"[A-Z]", password):
-        return False, "Password must contain at least one uppercase letter."
-    if not re.search(r"[a-z]", password):
-        return False, "Password must contain at least one lowercase letter."
-    if not re.search(r"\d", password):
-        return False, "Password must contain at least one number."
-    if not re.search(r"[ !@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?]", password):
-        return False, "Password must contain at least one special character."
-    return True, "Strong password"
+    if len(password) < 8: return False, "Password must be at least 8 characters long."
+    if not re.search(r"[A-Z]", password): return False, "Password must contain an uppercase letter."
+    if not re.search(r"[a-z]", password): return False, "Password must contain a lowercase letter."
+    if not re.search(r"\d", password): return False, "Password must contain a number."
+    if not re.search(r"[\W_]", password): return False, "Password must contain a symbol (e.g. !@#$)."
+    return True, "Valid"
 
 def log_action(actor_type, actor_id, action, entity_type, entity_id, status, description):
     try:
@@ -838,6 +833,7 @@ def store_signup_details():
                 phone=phone, 
                 gender=gender,
                 role='Customer',        # <--- FORCE CUSTOMER ROLE
+                profile_image='default.jpg',  # <--- ADDED DEFAULT IMAGE
                 auth_provider='local', 
                 otp=otp,
                 otp_expiry=datetime.utcnow() + timedelta(minutes=10),
@@ -932,6 +928,12 @@ def store_reset_password():
         if password != confirm:
             flash("Passwords do not match.", "danger")
         else:
+            user = User.query.get(reset_uid)
+            # --- [NEW] PREVENT REUSE ---
+            if user.password.startswith('scrypt:') and check_password_hash(user.password, password):
+                flash("You cannot reuse your current password. Please choose a new one.", "danger")
+                return render_template('store_reset_password.html')
+            # ---------------------------
             valid, msg = is_password_strong(password)
             if not valid:
                 flash(f"Weak Password: {msg}", "danger")
@@ -997,14 +999,34 @@ def google_callback():
         
         # 1. Create Account if it doesn't exist
         if not user:
-            count = User.query.count() + 1
-            custom_id = f"CUST-{datetime.now().year}-{count:03d}"
+            # --- BUG FIX: Safe ID Generation ---
+            # Instead of counting rows (which breaks if you delete users), find the last ID used.
+            last_cust = User.query.filter(User.custom_id.like('CUST-%')).order_by(User.id.desc()).first()
+
+            if last_cust and last_cust.custom_id:
+                try:
+                    # Extract last number (e.g. 'CUST-2026-005' -> 5)
+                    last_num = int(last_cust.custom_id.split('-')[-1])
+                    new_num = last_num + 1
+                except (ValueError, IndexError):
+                    new_num = User.query.count() + 1
+            else:
+                new_num = 1
+
+            custom_id = f"CUST-{datetime.now().year}-{new_num:03d}"
+            # -----------------------------------
+
             user = User(
-                custom_id=custom_id, username=email, email=email,
-                # We use a specific placeholder to identify users who haven't set a password yet
+                custom_id=custom_id, 
+                username=email, 
+                email=email, 
                 password="GOOGLE_OAUTH_USER", 
-                first_name=first_name, last_name=last_name,
-                role='Customer', auth_provider='google', is_verified=True
+                first_name=first_name, 
+                last_name=last_name, 
+                role='Customer', 
+                auth_provider='google', 
+                profile_image='default.jpg',  # <--- ADDED DEFAULT IMAGE
+                is_verified=True
             )
             db.session.add(user)
             db.session.commit()
@@ -1048,7 +1070,7 @@ def google_callback():
         
         flash(f"Google Sign-In failed: {str(e)}", "danger")
         return redirect(url_for('store_auth'))
-
+    
 # Discord Routes
 @app.route('/auth/discord')
 def discord_login():
@@ -1081,10 +1103,15 @@ def discord_callback():
             count = User.query.count() + 1
             custom_id = f"CUST-{datetime.now().year}-{count:03d}"
             user = User(
-                custom_id=custom_id, username=email, email=email,
+                custom_id=custom_id, 
+                username=email, 
+                email=email, 
                 password="DISCORD_OAUTH_USER", 
-                first_name=first_name, last_name=last_name,
-                role='Customer', auth_provider='discord', is_verified=True
+                first_name=username, 
+                role='Customer', 
+                auth_provider='discord', 
+                profile_image='default.jpg',  # <--- ADDED DEFAULT IMAGE
+                is_verified=True
             )
             db.session.add(user)
             db.session.commit()
@@ -1375,6 +1402,11 @@ def security_update():
 
     if current_pw and new_pw:
         if is_correct:
+            # --- [NEW] PREVENT REUSE ---
+            if current_pw == new_pw:
+                flash("New password cannot be the same as your current password.", "danger")
+                return redirect(url_for('store_profile'))
+            # ---------------------------
             # 2. Validate New Password Strength
             valid, msg = is_password_strong(new_pw)
             if not valid:
@@ -2467,21 +2499,37 @@ def change_password():
         # 1. Enforce Email Requirement
         if not user.email and not email_input:
             flash("You must register a recovery email address to continue.", "danger")
-            # Force UI to show email field
             return render_template('change_password.html', user=user, email_required=True)
             
-        # 2. Prevent Reusing the Temporary/Old Password
-        # Check against plain text (temp password)
-        if user.password == new_pw:
-            flash("For security, you cannot reuse your temporary password.", "danger")
-            return render_template('change_password.html', user=user, email_required=(not user.email))
+        # 2. Prevent Password Reuse (ROBUST FIX)
+        is_reuse = False
         
-        # Check against hashed password
-        if user.password.startswith('scrypt:') and check_password_hash(user.password, new_pw):
-            flash("You cannot reuse your old password.", "danger")
+        # Check A: Exact Plaintext Match (e.g., if Admin set a temp password securely or insecurely)
+        if user.password == new_pw:
+            is_reuse = True
+            
+        # Check B: Hash Match (Universal - works for scrypt, pbkdf2, etc.)
+        else:
+            try:
+                # This function handles the hash format automatically
+                if check_password_hash(user.password, new_pw):
+                    is_reuse = True
+            except ValueError:
+                # This happens if user.password is not a valid hash (e.g. plain text)
+                # We already checked plain text above, so we can ignore this.
+                pass
+
+        if is_reuse:
+            flash("For security, you cannot reuse your previous password.", "danger")
             return render_template('change_password.html', user=user, email_required=(not user.email))
 
-        # 3. Save Updates
+        # 3. Validate Password Strength
+        valid, msg = is_password_strong(new_pw)
+        if not valid:
+            flash(f"Weak Password: {msg}", "danger")
+            return render_template('change_password.html', user=user, email_required=(not user.email))
+
+        # 4. Save Updates
         if email_input:
             user.email = email_input
             
@@ -2505,6 +2553,12 @@ def reset_password(user_id):
     new_username = request.form.get('new_username')
     new_email = request.form.get('new_email')
     temp_password = request.form.get('temp_password')
+
+    # --- [NEW] PREVENT REUSE ---
+    if user.password.startswith('scrypt:') and check_password_hash(user.password, temp_password):
+        flash("Error: New password cannot be the same as the user's current password.", "danger")
+        return redirect(url_for('admin_panel'))
+    # ---------------------------
     
     # 2. Update User Record
     if new_username: user.username = new_username
