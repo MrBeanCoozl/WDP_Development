@@ -47,9 +47,9 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # 4. Email Configuration
-app.config['SMTP_SERVER'] = 'smtp.gmail.com'
-app.config['SMTP_EMAIL'] = 'limjiaan41@gmail.com'.strip()
-app.config['SMTP_PASSWORD'] = 'amyt ywtr yjds vqkc'.replace(' ', '')
+app.config['SMTP_SERVER'] = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+app.config['SMTP_EMAIL'] = os.environ.get('SMTP_EMAIL')
+app.config['SMTP_PASSWORD'] = os.environ.get('SMTP_PASSWORD')
 
 # ==============================================================================
 # SECTION 3: OAUTH SETUP (GOOGLE & DISCORD)
