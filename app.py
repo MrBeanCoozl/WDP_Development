@@ -189,9 +189,12 @@ def send_otp_email(user_email, otp_code):
     sender_password = app.config.get('SMTP_PASSWORD')
     smtp_server = app.config.get('SMTP_SERVER')
     
+    # 1. LOG TO CONSOLE (Always reliable for Dev)
+    print(f"\n[SYSTEM OTP] To: {user_email} | Code: {otp_code}\n")
+    
+    # 2. Check Config
     if not sender_email or not sender_password:
-        print(f"\n[DEV MODE - OTP] To: {user_email} | Code: {otp_code}\n")
-        return True
+        return False # Indicate email wasn't sent (will trigger flash fallback)
         
     msg = MIMEMultipart()
     msg['From'] = sender_email
@@ -215,7 +218,7 @@ def send_otp_email(user_email, otp_code):
     except Exception as e:
         print(f"Email Error: {e}")
         return False
-
+    
 def send_temp_password_email(user_email, temp_password):
     # 1. Load Credentials (Exactly like send_otp_email)
     sender_email = app.config.get('SMTP_EMAIL')
@@ -709,11 +712,17 @@ def store_initiate_otp():
     user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
     db.session.commit()
     
-    send_otp_email(email, otp)
-    print(f"\n[LOGIN OTP] Code for {email}: {otp}\n")
+    # Attempt to send email
+    email_sent = send_otp_email(email, otp)
     
     session['pending_user_id'] = user.id
-    flash(f"Verification code sent to {email}", "success")
+    
+    if email_sent:
+        flash(f"Verification code sent to {email}", "success")
+    else:
+        # FALLBACK for Dev Mode or SMTP Failure
+        flash(f"Dev Mode: Your code is {otp}", "info")
+        
     return redirect(url_for('store_verify'))
 
 @app.route('/store/login/password', methods=['GET', 'POST'])
@@ -1316,6 +1325,17 @@ def store_profile():
     
     # 2. RUN EXPIRY CHECK
     check_invoice_expiry()
+
+    # --- FIX: CLEAR STALE OTP FLAGS ---
+    # If the user has a "Show Modal" flag but the OTP is expired or missing, clear it.
+    if session.get('show_password_verify'):
+        # If no OTP exists or it has expired
+        if not g.user.otp or (g.user.otp_expiry and g.user.otp_expiry < datetime.utcnow()):
+            session.pop('show_password_verify', None)
+            g.user.otp = None
+            db.session.commit()
+            print("[SYSTEM] Cleared stale OTP session flag")
+    # ----------------------------------
     
     # 3. Load Data
     client = Client.query.filter_by(email=g.user.email).first()
@@ -1407,28 +1427,31 @@ def security_update():
 
     if current_pw and new_pw:
         if is_correct:
-            # --- [NEW] PREVENT REUSE ---
             if current_pw == new_pw:
                 flash("New password cannot be the same as your current password.", "danger")
                 return redirect(url_for('store_profile'))
-            # ---------------------------
+            
             # 2. Validate New Password Strength
             valid, msg = is_password_strong(new_pw)
             if not valid:
                 flash(f"Security Error: {msg}", "danger")
             else:
-                # 3. Generate OTP & Send Email
+                # 3. Generate OTP & Save
                 otp = f"{random.randint(100000, 999999)}"
                 g.user.new_password_temp = generate_password_hash(new_pw)
                 g.user.otp = otp
                 g.user.otp_expiry = datetime.utcnow() + timedelta(minutes=10)
                 db.session.commit()
                 
-                # SEND EMAIL HERE
-                send_otp_email(g.user.email, otp)
-                print(f"\n[SECURITY OTP] Code for {g.user.email}: {otp}\n")
+                # 4. SEND EMAIL
+                email_sent = send_otp_email(g.user.email, otp)
                 
-                flash(f"Verification code sent to {g.user.email}", "info")
+                if email_sent:
+                    flash(f"Verification code sent to {g.user.email}", "info")
+                else:
+                    # FALLBACK if SMTP fails
+                    flash(f"Dev Mode: Verification code is {otp}", "warning")
+                
                 session['show_password_verify'] = True
         else:
             flash("Incorrect current password.", "danger")
@@ -1455,12 +1478,12 @@ def verify_security():
 def cancel_verify():
     """Cancels the verification process and clears session flags."""
     session.pop('show_password_verify', None)
-    session.pop('show_email_verify', None)
+    # session.pop('show_email_verify', None) <--- Removed as email OTP is gone
     
     if g.user:
         g.user.otp = None
         g.user.new_password_temp = None
-        g.user.new_email_temp = None
+        # g.user.new_email_temp = None <--- Removed
         db.session.commit()
         
     flash("Verification cancelled.", "info")
@@ -1504,6 +1527,45 @@ def verify_email_change():
         session['show_email_verify'] = True
     return redirect(url_for('store_profile'))
 
+@app.route('/store/profile/update_email', methods=['POST'])
+def update_email_address():
+    if not g.user: return redirect(url_for('store_auth'))
+    
+    new_email = request.form.get('new_email')
+    current_password = request.form.get('current_password')
+    
+    if not new_email or not current_password:
+        flash("Please provide both the new email and your current password.", "warning")
+        return redirect(url_for('store_profile'))
+
+    # 1. Verify Current Password
+    is_correct = False
+    if g.user.password.startswith('scrypt:'):
+         is_correct = check_password_hash(g.user.password, current_password)
+    else:
+         is_correct = (g.user.password == current_password)
+         
+    if not is_correct:
+        flash("Incorrect password. Email update failed.", "danger")
+        return redirect(url_for('store_profile'))
+
+    # 2. Check Uniqueness
+    if User.query.filter_by(email=new_email).first():
+        flash("This email address is already in use.", "danger")
+        return redirect(url_for('store_profile'))
+
+    # 3. Update Email
+    old_email = g.user.email
+    g.user.email = new_email
+    # Optionally update username if it mirrors email, though typically username is unique/static
+    if g.user.username == old_email:
+        g.user.username = new_email
+        
+    db.session.commit()
+    
+    log_action('Customer', g.user.username, 'Update Profile', 'User', g.user.id, 'Success', f'Changed Email from {old_email} to {new_email}')
+    flash("Email address updated successfully.", "success")
+    return redirect(url_for('store_profile'))
 
 @app.route('/store/profile/payment', methods=['POST'])
 def update_payment():

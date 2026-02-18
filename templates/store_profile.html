@@ -349,7 +349,7 @@
             <div class="security-card">
                 <div class="card-header">
                     <h3>Change Password</h3>
-                    <p>Update your password associated with this account. Requires verification.</p>
+                    <p>Update your password. We will send an OTP to your email to verify this request.</p>
                 </div>
                 
                 <form action="{{ url_for('security_update') }}" method="POST">
@@ -371,17 +371,17 @@
                         </ul>
                     </div>
                     
-                    <button type="submit" id="change_password_btn" class="btn-save" style="width:100%" disabled>Update Password</button>
+                    <button type="submit" id="change_password_btn" class="btn-save" style="width:100%" disabled>Verify & Update</button>
                 </form>
             </div>
 
             <div class="security-card">
                 <div class="card-header">
                     <h3>Email Address</h3>
-                    <p>Change your login email. We will send an OTP to your current email to verify.</p>
+                    <p>Change your login email. You must enter your current password to confirm.</p>
                 </div>
                 
-                <form action="{{ url_for('request_email_change') }}" method="POST">
+                <form action="{{ url_for('update_email_address') }}" method="POST">
                     <div class="form-group">
                         <label class="form-label">Current Email</label>
                         <input type="text" class="form-input" value="{{ user.email }}" disabled style="background: #f9f9f9; color: #666;">
@@ -391,13 +391,41 @@
                         <label class="form-label">New Email Address</label>
                         <input type="email" name="new_email" class="form-input" required placeholder="new@example.com">
                     </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Confirm with Password</label>
+                        <input type="password" name="current_password" class="form-input" required placeholder="Enter current password">
+                    </div>
                     
-                    <button type="submit" class="btn-save" style="width:100%">Send Verification Code</button>
+                    <button type="submit" class="btn-save" style="width:100%">Update Email</button>
                 </form>
             </div>
 
         </div>
-    </div> </div> <div id="logoutModal" class="modal-overlay">
+    </div> </div>
+
+    <div id="otpModal" class="modal-overlay {% if session.get('show_password_verify') %}show{% endif %}">
+        <div class="modal-card">
+            <div class="modal-icon warning"><i class="fa-solid fa-shield-halved"></i></div>
+            <h3 style="margin: 0 0 10px 0; font-size: 20px; font-weight: 800; text-align: center;">Verify Identity</h3>
+            <p style="color: #666; font-size: 14px; line-height: 1.5; text-align: center; margin: 0 0 20px 0;">
+                We've sent a verification code to <strong>{{ user.email }}</strong>.<br>Enter it below to complete your password change.
+            </p>
+            
+            <form action="{{ url_for('verify_security') }}" method="POST">
+                <div class="form-group">
+                    <input type="text" name="otp" class="form-input" placeholder="Enter 6-digit Code" style="text-align: center; letter-spacing: 5px; font-size: 20px; font-weight: 700;" required>
+                </div>
+                
+                <div class="modal-actions">
+                    <a href="{{ url_for('cancel_verify') }}" class="btn-cancel" style="text-align: center; text-decoration: none;">Cancel</a>
+                    <button type="submit" class="btn-danger" style="background: #000; width: 100%;">Confirm Change</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+ <div id="logoutModal" class="modal-overlay">
     <div class="modal-card">
         <div class="modal-icon warning"><i class="fa-solid fa-right-from-bracket"></i></div>
         <h3 style="margin: 0 0 10px 0; font-size: 20px; font-weight: 800; text-align: center;">Log Out?</h3>
