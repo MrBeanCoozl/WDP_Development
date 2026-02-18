@@ -8,36 +8,44 @@
 
 <style>
     .filter-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
-    .search-input { flex: 1; padding: 10px; border: 1px solid #dfe6e9; border-radius: 6px; min-width: 200px; }
-    .filter-select { padding: 10px; border: 1px solid #dfe6e9; border-radius: 6px; background: white; min-width: 150px; }
-    .btn-filter { padding: 10px 20px; background-color: #34495e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .search-input { flex: 1; padding: 10px; border: 1px solid #dfe6e9; border-radius: 6px; min-width: 250px; }
+    .filter-select { padding: 10px; border: 1px solid #dfe6e9; border-radius: 6px; background: white; min-width: 180px; }
+    .btn-filter { padding: 10px 25px; background-color: #34495e; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+    .btn-filter:hover { background-color: #2c3e50; }
+    
     .order-table { width: 100%; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-collapse: collapse; overflow: hidden; }
     .order-table th { background-color: #f8f9fa; color: #2d3436; font-weight: 700; padding: 15px; text-align: left; border-bottom: 2px solid #dfe6e9; }
     .order-table td { padding: 15px; border-bottom: 1px solid #f1f2f6; color: #636e72; vertical-align: middle; }
+    
     .status-badge { padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-    .status-Pending { background-color: #ffe082; color: #5d4037; }
-    .status-Invoiced { background-color: #a5d6a7; color: #1b5e20; }
+    .status-badge.shipped { background: #d1eaed; color: #2c3e50; }
+    .status-badge.ready { background: #d4edda; color: #155724; }
+
     .btn-action { padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 600; display: inline-block; }
-    .btn-gen { background-color: #0984e3; color: white; }
-    .btn-view { background-color: #636e72; color: white; }
     .col-actions { width: 1%; white-space: nowrap; text-align: center; }
 </style>
 
 <div class="filter-container">
-    <form method="GET" action="{{ url_for('orders') }}" style="display: flex; gap: 15px; width: 100%;">
-        <input type="text" name="search" class="search-input" placeholder="Search Client, Description or Order ID..." value="{{ request.args.get('search', '') }}">
+    <form method="GET" action="{{ url_for('orders') }}" style="display: flex; gap: 15px; width: 100%; flex-wrap: wrap;">
+        
+        <input type="text" name="search" class="search-input" 
+               placeholder="Search Order ID (e.g., 5, 123), Client, or Product..." 
+               value="{{ request.args.get('search', '') }}">
+        
         <select name="status" class="filter-select">
-            <option value="All">All Statuses</option>
-            <option value="Pending" {% if request.args.get('status') == 'Pending' %}selected{% endif %}>Pending</option>
-            <option value="Invoiced" {% if request.args.get('status') == 'Invoiced' %}selected{% endif %}>Invoiced</option>
+            <option value="All">All Shipment Status</option>
+            <option value="Not Shipped" {% if request.args.get('status') == 'Not Shipped' %}selected{% endif %}>Not Shipped (Pending)</option>
+            <option value="Shipped" {% if request.args.get('status') == 'Shipped' %}selected{% endif %}>Shipped</option>
         </select>
+
         <select name="sort" class="filter-select">
-            <option value="date_desc" {% if request.args.get('sort') == 'date_desc' %}selected{% endif %}>Newest First</option>
-            <option value="date_asc" {% if request.args.get('sort') == 'date_asc' %}selected{% endif %}>Oldest First</option>
-            <option value="price_high" {% if request.args.get('sort') == 'price_high' %}selected{% endif %}>Highest Amount</option>
-            <option value="price_low" {% if request.args.get('sort') == 'price_low' %}selected{% endif %}>Lowest Amount</option>
+            <option value="date_desc" {% if request.args.get('sort') == 'date_desc' %}selected{% endif %}>Newest Orders</option>
+            <option value="items_asc" {% if request.args.get('sort') == 'items_asc' %}selected{% endif %}>Lowest Items (Qty)</option>
+            <option value="total_high" {% if request.args.get('sort') == 'total_high' %}selected{% endif %}>Highest Total ($)</option>
+            <option value="total_low" {% if request.args.get('sort') == 'total_low' %}selected{% endif %}>Lowest Total ($)</option>
         </select>
-        <button type="submit" class="btn-filter">Filter</button>
+
+        <button type="submit" class="btn-filter">Search & Filter</button>
     </form>
 </div>
 
@@ -46,7 +54,10 @@
         <tr>
             <th>Order Ref</th>
             <th>Customer Info</th>
-            <th>Items to Pack (Qty x Item)</th> <th>Shipment Status</th> <th class="col-actions">Actions</th>
+            <th>Items to Pack (Products Only)</th> 
+            <th>Total</th>
+            <th>Shipment Status</th> 
+            <th class="col-actions">Actions</th>
         </tr>
     </thead>
     <tbody>
@@ -68,11 +79,13 @@
                 </ul>
             </td>
 
+            <td style="font-weight: 600;">${{ "%.2f"|format(order.amount) }}</td>
+
             <td>
                 {% if order.status == 'Shipped' %}
-                    <span class="status-badge" style="background:#d1eaed; color:#2c3e50;">Shipped</span>
+                    <span class="status-badge shipped">Shipped</span>
                 {% else %}
-                    <span class="status-badge" style="background:#d4edda; color:#155724;">Ready to Pack</span>
+                    <span class="status-badge ready">Ready to Pack</span>
                 {% endif %}
             </td>
 
@@ -84,14 +97,17 @@
                         </button>
                     </form>
                 {% else %}
-                    <span style="color: green; font-size: 12px;"><i class="fa-solid fa-check"></i> Complete</span>
+                    <span style="color: green; font-size: 12px; font-weight: bold;">
+                        <i class="fa-solid fa-check"></i> Complete
+                    </span>
                 {% endif %}
             </td>
         </tr>
         {% else %}
         <tr>
-            <td colspan="5" style="text-align: center; padding: 30px; color: #999;">
-                No paid orders waiting for fulfillment.
+            <td colspan="6" style="text-align: center; padding: 40px; color: #999;">
+                <i class="fa-solid fa-box-open" style="font-size: 24px; margin-bottom: 10px; display:block;"></i>
+                No orders found matching your search.
             </td>
         </tr>
         {% endfor %}
@@ -100,7 +116,7 @@
 
 <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
     <div style="font-size: 14px; color: #7f8c8d;">
-        Showing page <strong>{{ orders.page }}</strong> of {{ orders.pages }}
+        Page <strong>{{ orders.page }}</strong> of {{ orders.pages }}
     </div>
     
     <div style="display: flex; gap: 5px;">
@@ -110,22 +126,6 @@
                Previous
             </a>
         {% endif %}
-
-        {% for item in orders | smart_pagination %}
-            {% if item.type == 'page' %}
-                <a href="{{ url_for('orders', page=item.page, search=request.args.get('search', ''), status=request.args.get('status', 'All'), sort=request.args.get('sort', 'date_desc')) }}" 
-                   style="padding: 8px 14px; border-radius: 4px; text-decoration: none; font-size: 13px; 
-                          {{ 'background: #34495e; color: white;' if item.page == orders.page else 'background: white; color: #333; border: 1px solid #ddd;' }}">
-                    {{ item.page }}
-                </a>
-            {% else %}
-                <a href="{{ url_for('orders', page=item.page, search=request.args.get('search', ''), status=request.args.get('status', 'All'), sort=request.args.get('sort', 'date_desc')) }}" 
-                   title="Jump to middle (Page {{ item.page }})"
-                   style="padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; background: #f8f9fa; color: #7f8c8d; border: 1px solid #ddd;">
-                    ...
-                </a>
-            {% endif %}
-        {% endfor %}
 
         {% if orders.has_next %}
             <a href="{{ url_for('orders', page=orders.next_num, search=request.args.get('search', ''), status=request.args.get('status', 'All'), sort=request.args.get('sort', 'date_desc')) }}" 

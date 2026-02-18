@@ -2272,20 +2272,68 @@ def update_targets():
     except Exception as e: flash(f'Error: {str(e)}', 'danger')
     return redirect(url_for('dashboard'))
 
+# [In app.py] Replace the existing 'orders' route with this:
+
 @app.route('/orders')
 def orders():
-    if not g.user or g.user.role == 'Customer': return redirect(url_for('login'))
-    page = request.args.get('page', 1, type=int)
-    
-    # --- REVAMP: ONLY SHOW PAID ORDERS ---
-    # We filter out 'Pending', 'Cancelled', and 'Expired'
-    # We assume 'Invoiced' or 'Paid' means it's ready to ship.
-    query = Order.query.filter(Order.status.in_(['Invoiced', 'Paid', 'Shipped', 'Delivered'])).order_by(Order.date_placed.desc())
-    
-    orders_pagination = query.paginate(page=page, per_page=10, error_out=False)
-    return render_template('orders.html', orders=orders_pagination)
+    # 1. Security Check (Replaces @login_required)
+    if not g.user or g.user.role == 'Customer': 
+        return redirect(url_for('login'))
 
-# [REPLACE THE EXISTING 'invoices' ROUTE IN app.py]
+    # 2. Get Arguments
+    page = request.args.get('page', 1, type=int)
+    search_query = request.args.get('search', '').strip()
+    status_filter = request.args.get('status', 'All')
+    sort_option = request.args.get('sort', 'date_desc')
+
+    # 3. Base Query
+    # Join Client to search names, outerjoin OrderItem to search products
+    query = Order.query.join(Client).outerjoin(OrderItem).group_by(Order.id)
+
+    # 4. Smart Search Logic
+    if search_query:
+        # Create a "clean" version for ID matching (e.g. "ORD-005" -> "5", "005" -> "5")
+        import re
+        clean_id_search = re.sub(r'[^0-9]', '', search_query) # Remove non-digits
+        
+        search_filters = [
+            Client.name.ilike(f'%{search_query}%'),      # Client Name
+            Client.company.ilike(f'%{search_query}%'),   # Company
+            OrderItem.item_name.ilike(f'%{search_query}%'), # Product Name
+            Order.order_code.ilike(f'%{search_query}%')  # Standard Code match
+        ]
+        
+        # If the user typed a number (like "5" or "123"), explicitly try to match the ID
+        if clean_id_search:
+            search_filters.append(Order.order_code.ilike(f'%ORD-{clean_id_search.zfill(3)}%')) 
+            search_filters.append(Order.order_code.ilike(f'%{clean_id_search}%')) 
+            
+        query = query.filter(or_(*search_filters))
+
+    # 5. Status Filter (Shipped vs Not Shipped)
+    if status_filter == 'Shipped':
+        query = query.filter(Order.status == 'Shipped')
+    elif status_filter == 'Not Shipped':
+        query = query.filter(Order.status != 'Shipped')
+
+    # 6. Sorting Logic
+    if sort_option == 'items_asc':
+        # Sort by Quantity of Items
+        query = query.order_by(func.sum(OrderItem.quantity).asc())
+    elif sort_option == 'total_high':
+        # Highest Total Amount
+        query = query.order_by(Order.amount.desc())
+    elif sort_option == 'total_low':
+        # Lowest Total Amount
+        query = query.order_by(Order.amount.asc())
+    else:
+        # Default: Newest First
+        query = query.order_by(Order.date_placed.desc())
+
+    # 7. Pagination
+    orders_pagination = query.paginate(page=page, per_page=10, error_out=False)
+
+    return render_template('orders.html', orders=orders_pagination)
 
 @app.route('/invoices')
 def invoices():
