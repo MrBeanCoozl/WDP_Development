@@ -1953,30 +1953,32 @@ def store_checkout_success(order_code):
     
     order = Order.query.filter_by(order_code=order_code).first()
     
-    # --- UPDATED LOGIC: FILTER OUT ALREADY REVIEWED ITEMS ---
+    # --- LOGIC TO MATCH ORDER ITEMS BACK TO PRODUCTS FOR REVIEW ---
     reviewable_items = []
     if order:
         for item in order.items:
-            # Clean name logic (matches "Product Name (Size)" -> "Product Name")
-            base_name = item.item_name.split(' (')[0]
+            # Skip non-product items (Fees/Tax)
+            if "Shipping Fee" in item.item_name or "GST" in item.item_name:
+                continue
+
+            # FIX: Use rsplit (Right Split) to only remove the LAST parenthesis group (the variant info)
+            # This preserves product names that naturally have brackets like "Vintage Tee (Unisex) (Red, L)"
+            base_name = item.item_name.rsplit(' (', 1)[0]
+            
             product = Product.query.filter_by(name=base_name).first()
             
             if product:
-                # CHECK DATABASE: Has user already reviewed this product?
-                existing_review = Review.query.filter_by(
-                    user_id=g.user.id, 
-                    product_id=product.id
-                ).first()
-                
-                # Only add to list if NO review exists
-                if not existing_review:
-                    reviewable_items.append({
-                        'product_id': product.id,
-                        'name': item.item_name
-                    })
+                reviewable_items.append({
+                    'product_id': product.id,
+                    'name': item.item_name
+                })
+            else:
+                # Fallback: Try exact match if rsplit failed or name has no variants
+                product = Product.query.filter_by(name=item.item_name).first()
+                if product:
+                    reviewable_items.append({'product_id': product.id, 'name': item.item_name})
     
     return render_template('store_checkout_success.html', order_code=order_code, order=order, reviewable_items=reviewable_items)
-
 @app.route('/review/submit_checkout', methods=['POST'])
 def submit_checkout_review():
     if not g.user:
