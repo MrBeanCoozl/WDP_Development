@@ -168,10 +168,10 @@
 <div class="profile-container">
     <div class="profile-sidebar">
         <div class="profile-pic-container">
-            {% if user.profile_image %}
+            {% if user.profile_image and user.profile_image != 'default.jpg' %}
                 <img src="{{ url_for('static', filename='profile_pics/' + user.profile_image) }}" alt="Profile">
             {% else %}
-                <img src="static\images\default.jpg" alt="Profile">
+                <img src="{{ url_for('static', filename='images/default.jpg') }}" alt="Profile">
             {% endif %}
         </div>
         

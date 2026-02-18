@@ -227,10 +227,10 @@
             
             {% if g.user %}
                 <a href="{{ url_for('store_profile') }}" title="Profile">
-                    {% if g.user.profile_image %}
+                    {% if g.user.profile_image and g.user.profile_image != 'default.jpg' %}
                         <img src="{{ url_for('static', filename='profile_pics/' + g.user.profile_image) }}" class="nav-user-img" alt="User">
                     {% else %}
-                        <i class="fa-regular fa-user nav-icon"></i> 
+                        <img src="{{ url_for('static', filename='images/default.jpg') }}" class="nav-user-img" alt="User">
                     {% endif %}
                 </a>
             {% else %}
@@ -241,7 +241,7 @@
                 <i class="fa-solid fa-bag-shopping"></i>
                 {% if cart_count > 0 %}<span class="badge">{{ cart_count }}</span>{% endif %}
             </a>
-        </div>
+</div>
     </nav>
 
     <div class="container" style="margin-top: 20px; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: 90%; max-width: 600px;">

@@ -303,7 +303,8 @@ class User(db.Model):
     # CRITICAL: This separates Admins from Customers
     # Values: 'Customer' vs 'SuperAdmin', 'Manager', 'Staff'
     role = db.Column(db.String(20), default='Staff') 
-    
+    # In app.py - class User
+    profile_image = db.Column(db.String(200), default='default.jpg') # Added default='default.jpg'
     email = db.Column(db.String(120), unique=True, nullable=True)
     
     # --- CUSTOMER DETAILS ---
