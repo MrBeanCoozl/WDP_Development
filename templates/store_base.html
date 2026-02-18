@@ -20,12 +20,12 @@
         /* ANNOUNCEMENT BAR */
         .announcement-bar { background: #111; color: white; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; padding: 10px 0; text-align: center; }
 
-        /* PREMIUM NAVIGATION */
+        /* --- FIXED NAVIGATION LAYOUT (GRID FIX) --- */
         .store-nav { 
             height: var(--nav-height); 
-            display: flex; 
+            display: grid; 
+            grid-template-columns: 1fr auto 1fr; /* Left, Center, Right */
             align-items: center; 
-            justify-content: space-between; 
             padding: 0 50px; 
             background: rgba(255, 255, 255, 0.98); 
             border-bottom: 1px solid rgba(0,0,0,0.05); 
@@ -34,15 +34,13 @@
 
         .logo { font-size: 24px; font-weight: 800; letter-spacing: -1px; text-transform: uppercase; color: #000; }
         
-        /* CENTER LINKS - UPDATED ALIGNMENT */
+        /* CENTER LINKS - NO OVERLAP */
         .nav-center { 
             display: flex; 
             gap: 40px; 
             height: 100%; 
             align-items: center; 
-            position: absolute; /* Keeps links perfectly centered relative to page */
-            left: 50%;
-            transform: translateX(-50%);
+            /* Removed absolute positioning */
         }
         
         .nav-item { 
@@ -73,12 +71,12 @@
         .dropdown-link:hover { background: #f9f9f9; color: black; }
 
         /* RIGHT SECTION */
-        .nav-right { display: flex; align-items: center; gap: 25px; }
+        .nav-right { display: flex; align-items: center; gap: 25px; justify-self: end; }
         
         .search-wrapper { position: relative; }
         .search-bar { 
             display: flex; align-items: center; 
-            border-bottom: 1px solid #ddd; /* Minimalist underline style */
+            border-bottom: 1px solid #ddd; 
             padding: 5px 0; 
             width: 200px; 
             transition: 0.3s;
@@ -113,18 +111,18 @@
         .footer-bottom { border-top: 1px solid #e5e5e5; padding-top: 30px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #777; }
         .payment-icons i { font-size: 24px; margin-left: 10px; color: #ccc; }
 
-        @media (max-width: 1100px) { .nav-center { position: relative; left: auto; transform: none; margin: 0 20px; } .search-bar { width: 150px; } }
-        @media (max-width: 900px) { .store-nav { padding: 0 20px; } .nav-center, .search-wrapper { display: none; } .footer-grid { grid-template-columns: 1fr 1fr; gap: 30px; } .footer-brand, .newsletter-col { grid-column: span 2; } .footer-bottom { flex-direction: column; gap: 15px; } }
+        @media (max-width: 1100px) { .nav-center { display: none; } .store-nav { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 900px) { .store-nav { padding: 0 20px; } .search-wrapper { display: none; } .footer-grid { grid-template-columns: 1fr 1fr; gap: 30px; } .footer-brand, .newsletter-col { grid-column: span 2; } .footer-bottom { flex-direction: column; gap: 15px; } }
 
-  /* --- ANIMATIONS --- */
-        @keyframes slideInUp {
-            0% { opacity: 0; transform: translateY(15px) scale(0.96); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes pulse {
-            0% { box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
-            50% { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
-            100% { box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+        /* --- ANIMATIONS --- */
+        @keyframes slideInUp { 0% { opacity: 0; transform: translateY(15px) scale(0.96); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes pulse { 0% { box-shadow: 0 4px 20px rgba(0,0,0,0.15); } 50% { box-shadow: 0 4px 30px rgba(0,0,0,0.3); } 100% { box-shadow: 0 4px 20px rgba(0,0,0,0.15); } }
+
+        /* FLYING IMAGE ANIMATION (Restored) */
+        .flying-img {
+            position: fixed; z-index: 9999; border-radius: 50%; opacity: 0.9;
+            pointer-events: none; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: all 0.8s cubic-bezier(0.19, 1, 0.22, 1);
         }
 
         /* --- WIDGET BUTTON --- */
@@ -140,7 +138,7 @@
         }
         .chat-widget-btn:hover { transform: scale(1.1) rotate(-5deg); }
         .chat-widget-btn i { transition: transform 0.3s; }
-        .chat-widget-btn.open i { transform: rotate(90deg); opacity: 0; } /* Icon switch logic */
+        .chat-widget-btn.open i { transform: rotate(90deg); opacity: 0; }
 
         /* --- WINDOW CONTAINER --- */
         .chat-window {
@@ -153,123 +151,50 @@
             z-index: 9999;
             overflow: hidden;
             border: 1px solid rgba(0,0,0,0.05);
-            
-            /* Animation State: Closed */
             opacity: 0;
             transform: translateY(20px) scale(0.95);
             pointer-events: none;
             transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        
-        /* Animation State: Open */
-        .chat-window.active {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-            pointer-events: all;
-        }
+        .chat-window.active { opacity: 1; transform: translateY(0) scale(1); pointer-events: all; }
 
         /* --- HEADER --- */
-        .chat-header {
-            background: #111; color: white;
-            padding: 20px;
-            display: flex; align-items: center; justify-content: space-between;
-            font-size: 15px; font-weight: 600; letter-spacing: 0.5px;
-        }
+        .chat-header { background: #111; color: white; padding: 20px; display: flex; align-items: center; justify-content: space-between; font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
         .close-chat { cursor: pointer; opacity: 0.6; transition: 0.2s; }
         .close-chat:hover { opacity: 1; transform: rotate(90deg); }
 
         /* --- BODY --- */
-        .chat-body {
-            flex: 1; padding: 20px;
-            overflow-y: auto;
-            background: #fff;
-            display: flex; flex-direction: column; gap: 12px;
-            scroll-behavior: smooth;
-        }
-        /* Custom Scrollbar */
+        .chat-body { flex: 1; padding: 20px; overflow-y: auto; background: #fff; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
         .chat-body::-webkit-scrollbar { width: 6px; }
         .chat-body::-webkit-scrollbar-track { background: transparent; }
         .chat-body::-webkit-scrollbar-thumb { background: #e0e0e0; border-radius: 3px; }
 
         /* --- BUBBLES --- */
-        .message {
-            max-width: 80%; padding: 12px 16px;
-            font-size: 13px; line-height: 1.5;
-            border-radius: 14px;
-            position: relative;
-            
-            /* Apply Animation */
-            animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        .bot-msg { 
-            align-self: flex-start; 
-            background: #f4f4f5; color: #111; 
-            border-bottom-left-radius: 4px;
-        }
-        .user-msg { 
-            align-self: flex-end; 
-            background: #111; color: white; 
-            border-bottom-right-radius: 4px; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
+        .message { max-width: 80%; padding: 12px 16px; font-size: 13px; line-height: 1.5; border-radius: 14px; position: relative; animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .bot-msg { align-self: flex-start; background: #f4f4f5; color: #111; border-bottom-left-radius: 4px; }
+        .user-msg { align-self: flex-end; background: #111; color: white; border-bottom-right-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
 
         /* --- SUGGESTIONS --- */
         .suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; animation: slideInUp 0.5s ease forwards; }
-        .chip {
-            font-size: 11px; font-weight: 600;
-            background: white; border: 1px solid #e5e5e5;
-            padding: 8px 14px; border-radius: 20px;
-            cursor: pointer; transition: all 0.2s;
-            color: #555;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-        .chip:hover { 
-            background: #111; color: white; border-color: #111; 
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
+        .chip { font-size: 11px; font-weight: 600; background: white; border: 1px solid #e5e5e5; padding: 8px 14px; border-radius: 20px; cursor: pointer; transition: all 0.2s; color: #555; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .chip:hover { background: #111; color: white; border-color: #111; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
 
         /* --- FOOTER --- */
-        .chat-footer {
-            padding: 15px 20px;
-            border-top: 1px solid #f0f0f0;
-            display: flex; align-items: center; gap: 12px;
-            background: white;
-        }
-        .chat-input {
-            flex: 1; border: none; outline: none;
-            font-size: 14px; font-family: 'Inter', sans-serif;
-            background: #f9f9f9; padding: 10px 15px; border-radius: 8px;
-            transition: 0.2s;
-        }
+        .chat-footer { padding: 15px 20px; border-top: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; background: white; }
+        .chat-input { flex: 1; border: none; outline: none; font-size: 14px; font-family: 'Inter', sans-serif; background: #f9f9f9; padding: 10px 15px; border-radius: 8px; transition: 0.2s; }
         .chat-input:focus { background: #fff; box-shadow: inset 0 0 0 1px #ddd; }
-        
-        .send-btn {
-            background: #111; border: none;
-            color: white; width: 36px; height: 36px;
-            border-radius: 50%;
-            cursor: pointer; transition: 0.2s;
-            display: flex; align-items: center; justify-content: center;
-        }
+        .send-btn { background: #111; border: none; color: white; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
         .send-btn:hover { transform: scale(1.1); }
         .send-btn:disabled { background: #eee; cursor: default; transform: none; }
 
         /* --- LOADING DOTS --- */
-        .typing-indicator { 
-            display: none; align-self: flex-start; 
-            background: #f4f4f5; padding: 10px 16px; 
-            border-radius: 14px; margin-bottom: 10px;
-            border-bottom-left-radius: 4px;
-            animation: slideInUp 0.3s ease forwards;
-        }
+        .typing-indicator { display: none; align-self: flex-start; background: #f4f4f5; padding: 10px 16px; border-radius: 14px; margin-bottom: 10px; border-bottom-left-radius: 4px; animation: slideInUp 0.3s ease forwards; }
         .dot { height: 6px; width: 6px; background: #999; border-radius: 50%; display: inline-block; animation: bounce 1.4s infinite ease-in-out both; margin: 0 2px; }
         .dot:nth-child(1) { animation-delay: -0.32s; }
         .dot:nth-child(2) { animation-delay: -0.16s; }
         @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
         
-        @media(max-width: 480px) {
-            .chat-window { width: 90%; right: 5%; bottom: 80px; height: 60vh; }
-        }
+        @media(max-width: 480px) { .chat-window { width: 90%; right: 5%; bottom: 80px; height: 60vh; } }
     </style>
 </head>
 <body>
@@ -280,7 +205,6 @@
         
         <div class="nav-center">
             <a href="{{ url_for('store_home') }}" class="nav-item">Home</a>
-            
             <div class="nav-item">Shop <i class="fa-solid fa-chevron-down" style="font-size: 10px; margin-left: 5px;"></i>
                 <div class="dropdown-menu">
                     <a href="{{ url_for('store_shop', category='All') }}" class="dropdown-link">All Products</a>
@@ -289,9 +213,7 @@
                     <a href="{{ url_for('store_shop', category='Shoes') }}" class="dropdown-link">Footwear</a>
                 </div>
             </div>
-
             <a href="{{ url_for('store_about') }}" class="nav-item">About</a>
-            
             <a href="{{ url_for('store_contact') }}" class="nav-item">Contact</a>
         </div>
 
@@ -440,68 +362,127 @@
     </div>
 
 <script>
-        // --- UI TOGGLE LOGIC ---
+        // --- AJAX CART ANIMATION LOGIC (RESTORED) ---
+        document.addEventListener('DOMContentLoaded', function() {
+            // This listens for any form submission with class 'ajax-cart-form'
+            const forms = document.querySelectorAll('.ajax-cart-form');
+            forms.forEach(form => {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault(); 
+                    
+                    const productId = this.dataset.id;
+                    const prefix = this.dataset.prefix || '';
+                    const sourceImg = document.getElementById(`mainImage`) || document.getElementById(`img-${prefix}${productId}`);
+                    const cartIcon = document.querySelector('.fa-bag-shopping');
+                    
+                    // 1. Flying Image Animation
+                    if (sourceImg && cartIcon) {
+                        const flyingImg = sourceImg.cloneNode();
+                        flyingImg.classList.add('flying-img');
+                        
+                        const startRect = sourceImg.getBoundingClientRect();
+                        const endRect = cartIcon.getBoundingClientRect();
+                        
+                        flyingImg.style.width = startRect.width + 'px';
+                        flyingImg.style.height = startRect.height + 'px';
+                        flyingImg.style.top = startRect.top + 'px';
+                        flyingImg.style.left = startRect.left + 'px';
+                        
+                        document.body.appendChild(flyingImg);
+                        void flyingImg.offsetWidth; // Trigger reflow
+                        
+                        flyingImg.style.top = (endRect.top) + 'px';
+                        flyingImg.style.left = (endRect.left) + 'px';
+                        flyingImg.style.width = '20px';
+                        flyingImg.style.height = '20px';
+                        flyingImg.style.opacity = '0';
+                        
+                        setTimeout(() => {
+                            flyingImg.remove();
+                            // Optional: Pulse the cart icon
+                            cartIcon.style.transform = 'scale(1.2)';
+                            setTimeout(() => cartIcon.style.transform = 'scale(1)', 200);
+                        }, 800);
+                    }
+                    
+                    // 2. AJAX Fetch Request
+                    const formData = new FormData(this);
+                    fetch("{{ url_for('store_cart') }}", {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(response => {
+                        // If standard redirect (no JSON), reload page (fallback)
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                            return;
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data && data.status === 'success') {
+                            // Update Badge
+                            let badge = document.querySelector('.nav-icon .badge');
+                            if (!badge) {
+                                badge = document.createElement('span');
+                                badge.className = 'badge';
+                                document.querySelector('.fa-bag-shopping').parentElement.appendChild(badge);
+                            }
+                            badge.textContent = data.cart_count;
+                        }
+                    })
+                    .catch(err => console.log('Cart update error:', err));
+                });
+            });
+        });
+
+        // --- CHAT WIDGET LOGIC (PRESERVED) ---
         function toggleChat() {
             const win = document.getElementById('chatWindow');
             const btn = document.getElementById('widgetBtn');
-            
             win.classList.toggle('active');
-            
-            // Focus input when opening
             if(win.classList.contains('active')) {
-                // Small delay to ensure transition finishes or element is visible
                 setTimeout(() => {
                     const input = document.getElementById('chatInput');
                     if(input) input.focus();
                 }, 100);
             }
         }
-
-        // --- INPUT HANDLING ---
         function handleEnter(e) {
-            // Using onkeydown allows us to prevent the default newline/submit behavior
             if (e.key === 'Enter') {
                 e.preventDefault(); 
                 sendMessage();
             }
         }
-
         function sendSuggestion(text) {
             const input = document.getElementById('chatInput');
             input.value = text;
             sendMessage();
         }
-
-        // --- MESSAGE CREATION ---
         function createMessageElement(html, isUser) {
             const div = document.createElement('div');
             div.className = `message ${isUser ? 'user-msg' : 'bot-msg'}`;
             div.innerHTML = html;
             return div;
         }
-
-        // --- CORE SEND LOGIC ---
         function sendMessage() {
             const input = document.getElementById('chatInput');
             const btn = document.getElementById('sendBtn');
             const body = document.getElementById('chatBody');
             const typing = document.getElementById('typingIndicator');
             const msg = input.value.trim();
-
             if (!msg) return;
 
-            // 1. Append User Message
             body.insertBefore(createMessageElement(escapeHtml(msg), true), typing);
-            input.value = ''; // Clear input immediately
+            input.value = ''; 
             body.scrollTop = body.scrollHeight;
 
-            // 2. Lock Interface & Show Typing
             typing.style.display = 'block';
             body.scrollTop = body.scrollHeight;
             input.disabled = true; 
             btn.disabled = true;
 
-            // 3. Send to Backend
             fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -509,52 +490,35 @@
             })
             .then(res => res.json())
             .then(data => {
-                // Hide Typing
                 typing.style.display = 'none';
-                
-                // 4. Append Bot Response
                 let replyContent = '';
                 if (data.status === 'success') {
                     replyContent = formatLinks(data.reply);
                 } else {
-                    // Display backend error in red
                     replyContent = `<span style="color:#e74c3c">${data.reply}</span>`;
                 }
-                
                 body.insertBefore(createMessageElement(replyContent, false), typing);
-                
-                // 5. Unlock Interface
                 body.scrollTop = body.scrollHeight;
                 input.disabled = false;
                 btn.disabled = false;
-                input.focus(); // Focus back on input
+                input.focus(); 
             })
             .catch(err => {
                 console.error("Chat Error:", err);
-                
-                // Handle Network/Connection Errors
                 typing.style.display = 'none';
                 body.insertBefore(createMessageElement("Connection error. Please try again.", false), typing);
-                
-                // Unlock Interface even on error
                 input.disabled = false;
                 btn.disabled = false;
                 input.focus();
             });
         }
-
-        // --- UTILITIES ---
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
-        
         function formatLinks(text) {
-            // 1. Bold text: **text** -> <b>text</b>
             let formatted = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
-            
-            // 2. Convert URLs to clickable links
             formatted = formatted.replace(
                 /(https?:\/\/[^\s]+)/g, 
                 '<a href="$1" target="_blank" style="color:#000; text-decoration:underline;">$1</a>'

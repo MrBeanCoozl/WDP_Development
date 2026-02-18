@@ -2,302 +2,418 @@
 {% block content %}
 
 <style>
-    /* PREMIUM PRODUCT LAYOUT */
-    .product-container {
-        display: grid;
-        grid-template-columns: 1.2fr 0.8fr;
-        gap: 60px;
-        padding-top: 40px;
-        padding-bottom: 80px;
-        align-items: start;
-        max-width: 1200px;
-        margin: 0 auto;
+    /* --- CORE VARIABLES & LAYOUT --- */
+    :root {
+        --color-border: #e5e5e5;
+        --color-text-main: #111;
+        --color-text-sub: #666;
     }
 
-    /* GALLERY SECTION */
-    .gallery-wrapper {
+    .product-wrapper {
+        max-width: 1300px;
+        margin: 0 auto;
+        padding: 40px 40px 100px;
+    }
+
+    /* --- BREADCRUMBS --- */
+    .breadcrumbs {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--color-text-sub);
+        margin-bottom: 40px;
+    }
+    .breadcrumbs a { color: var(--color-text-sub); text-decoration: none; transition: 0.2s; }
+    .breadcrumbs a:hover { color: var(--color-text-main); }
+    .breadcrumbs span { margin: 0 8px; color: #ccc; }
+
+    /* --- SPLIT GRID --- */
+    .product-grid {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 80px;
+        align-items: start;
+    }
+
+    /* --- LEFT: STICKY GALLERY --- */
+    .gallery-column {
+        position: sticky;
+        top: 100px;
+        display: flex;
+        gap: 20px;
+    }
+    
+    .thumbs-col {
         display: flex;
         flex-direction: column;
-        gap: 15px;
+        gap: 12px;
+        width: 70px;
     }
-    
-    .main-stage {
-        background: #f4f4f5;
-        aspect-ratio: 1/1.25; /* Modern vertical ratio */
-        border-radius: 4px;
-        overflow: hidden;
-        cursor: crosshair;
-    }
-    
-    .main-stage img {
+    .thumb-btn {
         width: 100%;
-        height: 100%;
-        object-fit: cover;
-        transition: transform 0.5s ease;
-    }
-    
-    .main-stage:hover img {
-        transform: scale(1.05);
-    }
-
-    .thumb-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 10px;
-    }
-
-    .thumb-box {
-        aspect-ratio: 1/1;
+        aspect-ratio: 3/4;
         background: #f4f4f5;
-        border-radius: 4px;
-        overflow: hidden;
+        border: 1px solid transparent;
         cursor: pointer;
         opacity: 0.6;
-        border: 1px solid transparent;
-        transition: all 0.2s;
+        transition: all 0.3s ease;
+        padding: 0;
     }
+    .thumb-btn.active, .thumb-btn:hover { opacity: 1; border-color: #000; }
+    .thumb-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    .thumb-box.active, .thumb-box:hover {
-        opacity: 1;
-        border-color: #000;
+    .main-stage {
+        flex: 1;
+        background: #f4f4f5;
+        aspect-ratio: 3/4;
+        overflow: hidden;
+        cursor: zoom-in;
     }
+    .main-stage img {
+        width: 100%; height: 100%; object-fit: cover;
+        transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    .main-stage:hover img { transform: scale(1.05); }
 
-    .thumb-box img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
+    /* --- RIGHT: DETAILS PANEL --- */
+    .info-column { padding-top: 10px; }
 
-    /* DETAILS SECTION */
-    .details-panel {
-        position: sticky;
-        top: 100px; /* Sticks below navbar */
-    }
-
-    .p-category {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: #888;
-        letter-spacing: 1px;
-        margin-bottom: 10px;
-    }
-
-    .p-title {
-        font-size: 32px;
-        font-weight: 800;
-        line-height: 1.1;
-        margin: 0 0 15px;
-        letter-spacing: -1px;
-    }
-
-    .p-price {
-        font-size: 22px;
-        font-weight: 500;
-        color: #111;
-        margin-bottom: 30px;
-    }
+    .p-head { margin-bottom: 30px; }
+    .p-cat { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #999; margin-bottom: 15px; }
+    .p-title { font-size: 32px; font-weight: 800; line-height: 1.1; letter-spacing: -0.5px; margin: 0 0 15px; text-transform: uppercase; }
+    .p-price { font-size: 20px; font-weight: 500; color: #111; }
+    .p-price span { font-size: 12px; color: #777; font-weight: 400; margin-left: 10px; }
 
     /* SELECTORS */
-    .selector-block { margin-bottom: 25px; }
-    .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; display: block; letter-spacing: 0.5px; }
+    .form-group { margin-bottom: 30px; }
+    .group-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 12px; color: #111; }
     
-    .color-list { display: flex; gap: 10px; flex-wrap: wrap; }
-    .color-opt { cursor: pointer; }
-    .color-opt input { display: none; }
-    .color-swatch { 
-        padding: 8px 16px; 
-        border: 1px solid #e5e5e5; 
-        font-size: 12px; 
-        font-weight: 500; 
-        background: #fff; 
-        transition: 0.2s; 
-    }
-    .color-opt input:checked + .color-swatch { background: #000; color: #fff; border-color: #000; }
-    .color-opt:hover .color-swatch { border-color: #000; }
-
-    .size-list { display: flex; gap: 8px; flex-wrap: wrap; }
-    .size-opt { cursor: pointer; }
-    .size-opt input { display: none; }
-    .size-box {
-        width: 45px; height: 45px;
+    .opt-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    
+    .opt-label { cursor: pointer; position: relative; }
+    .opt-label input { display: none; }
+    .opt-ui {
+        height: 40px; min-width: 40px; padding: 0 15px;
         display: flex; align-items: center; justify-content: center;
-        border: 1px solid #e5e5e5;
+        border: 1px solid var(--color-border);
+        background: #fff;
         font-size: 12px; font-weight: 600;
-        transition: 0.2s;
+        transition: all 0.2s;
     }
-    .size-opt input:checked + .size-box { background: #000; color: #fff; border-color: #000; }
-    .size-opt:hover .size-box { border-color: #000; }
+    .opt-label:hover .opt-ui { border-color: #000; }
+    .opt-label input:checked + .opt-ui { background: #000; color: #fff; border-color: #000; }
 
-    /* ACTION BUTTONS */
-    .add-row {
-        display: grid;
-        grid-template-columns: 70px 1fr;
-        gap: 15px;
-        margin-bottom: 40px;
-        margin-top: 30px;
-    }
-
-    .qty-input {
-        width: 100%; height: 50px;
-        text-align: center;
-        border: 1px solid #e5e5e5;
-        font-size: 16px; font-weight: 600;
-        outline: none;
-    }
-
-    .add-btn {
-        background: #000;
-        color: #fff;
-        border: none;
-        font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
-        cursor: pointer;
-        transition: 0.3s;
-    }
-    .add-btn:hover { background: #333; }
-
-    /* ACCORDION (Details) */
-    .accordion-group { border-top: 1px solid #e5e5e5; margin-top: 20px; }
-    details {
-        border-bottom: 1px solid #e5e5e5;
-        padding: 22px 0;
-        cursor: pointer;
-    }
-    summary {
-        font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
-        list-style: none;
-        display: flex; justify-content: space-between; align-items: center;
-        outline: none;
-    }
-    summary::-webkit-details-marker { display: none; }
-    summary span { font-size: 16px; font-weight: 400; }
+    /* ACTION ROW */
+    .add-actions { display: flex; gap: 15px; margin-top: 40px; margin-bottom: 50px; align-items: center; }
     
-    details p, details div {
-        font-size: 14px; line-height: 1.7; color: #555;
-        margin-top: 15px;
-        animation: fadeIn 0.3s ease;
-    }
+    .qty-control { display: flex; align-items: center; border: 1px solid var(--color-border); height: 50px; width: 120px; background: white; }
+    .qty-btn { width: 40px; height: 100%; border: none; background: transparent; cursor: pointer; font-size: 16px; color: #555; transition: 0.2s; display: flex; align-items: center; justify-content: center; }
+    .qty-btn:hover { background: #f9f9f9; color: #000; }
+    .qty-input { flex: 1; height: 100%; text-align: center; border: none; outline: none; font-size: 14px; font-weight: 600; font-family: inherit; -moz-appearance: textfield; width: 40px; padding: 0; }
+    .qty-input::-webkit-outer-spin-button, .qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    
+    .btn-black { flex: 1; background: #000; color: #fff; border: none; height: 50px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; cursor: pointer; transition: 0.3s; }
+    .btn-black:hover { opacity: 0.8; }
 
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    /* Accordion */
+    .accordion { border-top: 1px solid var(--color-border); }
+    details { border-bottom: 1px solid var(--color-border); padding: 22px 0; cursor: pointer; }
+    summary { list-style: none; display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    summary::-webkit-details-marker { display: none; }
+    details p { font-size: 13px; line-height: 1.7; color: var(--color-text-sub); margin-top: 15px; }
 
-    /* RESPONSIVE */
+    /* --- SECTION SEPARATORS --- */
+    .divider { border-top: 1px solid var(--color-border); margin: 80px 0; }
+
+    /* --- REVIEWS (EDITORIAL STYLE) --- */
+    .reviews-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; }
+    .section-head h3 { font-size: 22px; font-weight: 800; text-transform: uppercase; margin: 0 0 5px; }
+    .section-head p { font-size: 14px; color: var(--color-text-sub); }
+
+    /* FILTERS */
+    .filter-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+    .filter-count { font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .filter-opts { display: flex; gap: 20px; }
+    .clean-select { border: none; background: transparent; font-size: 12px; font-weight: 600; text-transform: uppercase; cursor: pointer; outline: none; color: #555; }
+    .clean-select:hover { color: #000; }
+
+    /* Review Form */
+    .clean-form { margin-top: 30px; }
+    .clean-input { width: 100%; padding: 15px 0; border: none; border-bottom: 1px solid var(--color-border); font-family: inherit; font-size: 15px; background: transparent; outline: none; margin-bottom: 25px; transition: 0.3s; }
+    .clean-input:focus { border-bottom-color: #000; }
+    
+    .rating-row { display: flex; flex-direction: row-reverse; justify-content: flex-end; gap: 10px; margin-bottom: 20px; }
+    .rating-row input { display: none; }
+    .rating-row label { font-size: 28px; color: #ddd; cursor: pointer; transition: 0.2s; }
+    .rating-row input:checked ~ label, .rating-row label:hover, .rating-row label:hover ~ label { color: #000; }
+
+    .btn-outline { background: transparent; border: 1px solid #000; color: #000; padding: 14px 35px; font-size: 12px; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: 0.3s; }
+    .btn-outline:hover { background: #000; color: #fff; }
+
+    /* Review List */
+    .review-card { padding-bottom: 30px; margin-bottom: 30px; border-bottom: 1px solid #f9f9f9; }
+    .rc-top { display: flex; justify-content: space-between; margin-bottom: 10px; align-items: center; }
+    .rc-user { font-size: 13px; font-weight: 700; text-transform: uppercase; }
+    .rc-date { font-size: 11px; color: #aaa; }
+    .rc-stars { font-size: 12px; letter-spacing: 2px; margin-bottom: 8px; color: #000; }
+    .rc-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .rc-body { font-size: 15px; color: #555; line-height: 1.6; }
+
+    /* --- RECOMMENDATIONS --- */
+    .rec-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 25px; }
+    .rec-item { text-decoration: none; color: inherit; display: block; }
+    .rec-img-wrap { width: 100%; aspect-ratio: 3/4; overflow: hidden; margin-bottom: 15px; background: #f4f4f5; }
+    .rec-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: 0.3s; }
+    .rec-item:hover img { transform: scale(1.05); }
+    .rec-name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .rec-price { font-size: 13px; color: #666; }
+
+    /* --- MOBILE --- */
     @media (max-width: 900px) {
-        .product-container { grid-template-columns: 1fr; gap: 40px; }
-        .details-panel { position: static; }
+        .product-grid { grid-template-columns: 1fr; gap: 40px; }
+        .gallery-column { position: relative; top: 0; flex-direction: column-reverse; }
+        .thumbs-col { flex-direction: row; width: 100%; overflow-x: auto; height: auto; }
+        .thumb-btn { width: 70px; height: 70px; aspect-ratio: 1/1; }
+        .reviews-wrapper { grid-template-columns: 1fr; gap: 50px; }
+        .rec-grid { grid-template-columns: repeat(2, 1fr); }
+        .add-actions { flex-direction: column; align-items: stretch; }
+        .qty-control { width: 100%; }
     }
 </style>
 
-<div class="container product-container">
+<div class="product-wrapper">
     
-    <div class="gallery-wrapper">
-        {% set images = product.image_url.split('|') %}
+    <div class="breadcrumbs">
+        <a href="{{ url_for('store_home') }}">Home</a> <span>/</span> 
+        <a href="{{ url_for('store_shop', category=product.category) }}">{{ product.category }}</a> <span>/</span> 
+        {{ product.name }}
+    </div>
+
+    <div class="product-grid">
         
-        <div class="main-stage">
-            <img id="mainImage" src="{{ images[0].strip() }}" alt="{{ product.name }}">
+        <div class="gallery-column">
+            {% set images = product.image_url.split('|') %}
+            
+            <div class="thumbs-col">
+                {% for img in images %}
+                    {% set img_src = img.strip() %}
+                    {% if not img_src.startswith('http') %}
+                        {% set img_src = url_for('static', filename='product_images/' + img_src) %}
+                    {% endif %}
+
+                    <button class="thumb-btn {% if loop.first %}active{% endif %}" 
+                            onclick="changeImage(this, '{{ img_src }}')">
+                        <img src="{{ img_src }}">
+                    </button>
+                {% endfor %}
+            </div>
+            
+            <div class="main-stage">
+                {% set main_src = images[0].strip() %}
+                {% if not main_src.startswith('http') %}
+                    {% set main_src = url_for('static', filename='product_images/' + main_src) %}
+                {% endif %}
+                <img id="mainImage" src="{{ main_src }}" alt="{{ product.name }}">
+            </div>
         </div>
 
-        {% if images|length > 1 %}
-        <div class="thumb-grid">
-            {% for img in images %}
-            <div class="thumb-box {% if loop.first %}active{% endif %}" onclick="changeImage(this, '{{ img.strip() }}')">
-                <img src="{{ img.strip() }}" alt="Thumbnail">
+        <div class="info-column">
+            <div class="p-head">
+                <div class="p-cat">{{ product.category }}</div>
+                <h1 class="p-title">{{ product.name }}</h1>
+                <div class="p-price">
+                    ${{ "%.2f"|format(product.price) }}
+                    <span>Tax included.</span>
+                </div>
             </div>
+
+            <form action="{{ url_for('store_cart') }}" method="POST" class="ajax-cart-form" data-id="{{ product.id }}" data-prefix="pd-">
+                <input type="hidden" name="product_id" value="{{ product.id }}">
+
+                {% if product.colors %}
+                <div class="form-group">
+                    <label class="group-label">Color: <span id="colorLabel" style="font-weight:400; color:#666; text-transform:none;">Select</span></label>
+                    <div class="opt-list">
+                        {% for color in product.colors.split(',') %}
+                        <label class="opt-label">
+                            <input type="radio" name="color" value="{{ color.strip() }}" required onchange="document.getElementById('colorLabel').innerText = this.value">
+                            <div class="opt-ui">{{ color.strip() }}</div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                    <input type="hidden" name="color" value="Default">
+                {% endif %}
+
+                {% if product.sizes %}
+                <div class="form-group">
+                    <label class="group-label">Size</label>
+                    <div class="opt-list">
+                        {% for size in product.sizes.split(',') %}
+                        <label class="opt-label">
+                            <input type="radio" name="size" value="{{ size.strip() }}" required>
+                            <div class="opt-ui">{{ size.strip() }}</div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                    <input type="hidden" name="size" value="One Size">
+                {% endif %}
+
+                <div class="add-actions">
+                    <div class="qty-control">
+                        <button type="button" class="qty-btn" onclick="updateQty(-1)">-</button>
+                        <input type="number" name="quantity" id="qtyInput" value="1" min="1" class="qty-input" readonly>
+                        <button type="button" class="qty-btn" onclick="updateQty(1)">+</button>
+                    </div>
+                    <button type="submit" class="btn-black">Add to Bag</button>
+                </div>
+            </form>
+
+            <div class="accordion">
+                <details open>
+                    <summary>Description <span>+</span></summary>
+                    <p>{{ product.description }}</p>
+                </details>
+                <details>
+                    <summary>Fit & Sizing <span>+</span></summary>
+                    <p>Designed for a relaxed fit. Model is 6'1" wearing size L.</p>
+                </details>
+                <details>
+                    <summary>Shipping & Returns <span>+</span></summary>
+                    <p>Free express shipping on all orders over $150. Returns accepted within 30 days.</p>
+                </details>
+            </div>
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="reviews-wrapper" id="reviews-anchor">
+        <div style="position: sticky; top: 120px; height: fit-content;">
+            <div class="section-head">
+                <h3>Customer Reviews</h3>
+                <p>{{ reviews|length }} Verified Ratings</p>
+            </div>
+
+            <div style="margin-top: 30px;">
+                <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px;">Write a Review</div>
+                
+                {% if g.user %}
+                <form action="{{ url_for('add_product_review', product_id=product.id) }}" method="POST" class="clean-form">
+                    <div style="margin-bottom: 20px;">
+                        <label class="group-label" style="font-size: 10px;">Rating</label>
+                        <div class="rating-row">
+                            {% for i in range(5, 0, -1) %}
+                            <input type="radio" name="rating" id="star{{i}}" value="{{i}}" required>
+                            <label for="star{{i}}">★</label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <input type="text" name="title" class="clean-input" placeholder="Title your review" required>
+                    <textarea name="comment" class="clean-input" rows="3" placeholder="Share your thoughts..." required></textarea>
+                    
+                    <button type="submit" class="btn-outline">Post Review</button>
+                </form>
+                {% else %}
+                <div style="padding: 20px; background: #f9f9f9; border: 1px solid #eee;">
+                    <p style="font-size: 13px; margin-bottom: 10px;">Please login to write a review.</p>
+                    <a href="{{ url_for('store_auth') }}" style="font-size: 12px; text-decoration: underline; font-weight: 700; color: black;">LOGIN / SIGNUP</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <div class="filter-bar">
+                <div class="filter-count">{{ reviews|length }} Reviews</div>
+                <form action="{{ url_for('store_product', product_id=product.id) }}#reviews-anchor" method="GET" class="filter-opts">
+                    <select name="rating" onchange="this.form.submit()" class="clean-select">
+                        <option value="">All Ratings</option>
+                        <option value="5" {% if current_rating == '5' %}selected{% endif %}>5 Stars</option>
+                        <option value="4" {% if current_rating == '4' %}selected{% endif %}>4 Stars</option>
+                        <option value="3" {% if current_rating == '3' %}selected{% endif %}>3 Stars</option>
+                    </select>
+                    <select name="sort" onchange="this.form.submit()" class="clean-select">
+                        <option value="newest" {% if current_sort == 'newest' %}selected{% endif %}>Newest</option>
+                        <option value="oldest" {% if current_sort == 'oldest' %}selected{% endif %}>Oldest</option>
+                        <option value="highest" {% if current_sort == 'highest' %}selected{% endif %}>Highest Rated</option>
+                    </select>
+                </form>
+            </div>
+
+            {% if reviews %}
+                {% for review in reviews %}
+                <div class="review-card">
+                    <div class="rc-top">
+                        <span class="rc-user">{{ review.user.first_name }} {{ review.user.last_name[0] }}.</span>
+                        <span class="rc-date">{{ review.date_posted.strftime('%d %b %Y') }}</span>
+                    </div>
+                    <div class="rc-stars">
+                        {% for i in range(review.rating) %}★{% endfor %}
+                    </div>
+                    {% if review.title %}
+                    <div class="rc-title">"{{ review.title }}"</div>
+                    {% endif %}
+                    <div class="rc-body">{{ review.comment }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div style="padding: 60px 0; color: #999; font-style: italic; border-bottom: 1px solid #eee;">
+                    No reviews yet. Be the first to share your experience.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    {% if recommendations %}
+    <div class="rec-section">
+        <div class="section-head" style="margin-bottom: 40px; text-align: center;">
+            <h3>You May Also Like</h3>
+        </div>
+        <div class="rec-grid">
+            {% for item in recommendations %}
+            <a href="{{ url_for('store_product', product_id=item.id) }}" class="rec-item">
+                <div class="rec-img-wrap">
+                    {% set rec_src = item.image_url.split('|')[0].strip() %}
+                    {% if not rec_src.startswith('http') %}
+                        {% set rec_src = url_for('static', filename='product_images/' + rec_src) %}
+                    {% endif %}
+                    <img src="{{ rec_src }}" alt="{{ item.name }}">
+                </div>
+                <div class="rec-name">{{ item.name }}</div>
+                <div class="rec-price">${{ "%.2f"|format(item.price) }}</div>
+            </a>
             {% endfor %}
         </div>
-        {% endif %}
     </div>
+    {% endif %}
 
-    <div class="details-panel">
-        <div class="p-category">{{ product.category }}</div>
-        <h1 class="p-title">{{ product.name }}</h1>
-        <div class="p-price">${{ "%.2f"|format(product.price) }}</div>
-
-        <form action="{{ url_for('store_cart') }}" method="POST">
-            <input type="hidden" name="product_id" value="{{ product.id }}">
-
-            {% if product.colors %}
-            <div class="selector-block">
-                <label class="lbl">Color: <span id="colorLabel" style="font-weight:400; color:#666;">Select</span></label>
-                <div class="color-list">
-                    {% for color in product.colors.split(',') %}
-                    <label class="color-opt">
-                        <input type="radio" name="color" value="{{ color.strip() }}" required onchange="document.getElementById('colorLabel').innerText = this.value">
-                        <div class="color-swatch">{{ color.strip() }}</div>
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-            {% else %}
-                <input type="hidden" name="color" value="Default">
-            {% endif %}
-
-            {% if product.sizes %}
-            <div class="selector-block">
-                <label class="lbl">Size</label>
-                <div class="size-list">
-                    {% for size in product.sizes.split(',') %}
-                    <label class="size-opt">
-                        <input type="radio" name="size" value="{{ size.strip() }}" required>
-                        <div class="size-box">{{ size.strip() }}</div>
-                    </label>
-                    {% endfor %}
-                </div>
-            </div>
-            {% else %}
-                <input type="hidden" name="size" value="One Size">
-            {% endif %}
-
-            <div class="add-row">
-                <input type="number" name="quantity" value="1" min="1" class="qty-input">
-                <button type="submit" class="add-btn">Add to Bag</button>
-            </div>
-        </form>
-
-        <div class="accordion-group">
-            <details open>
-                <summary>Description <span>+</span></summary>
-                <p>{{ product.description }}</p>
-            </details>
-            
-            <details>
-                <summary>Shipping & Returns <span>+</span></summary>
-                <div>
-                    Free shipping on orders over $150. International shipping available. Returns accepted within 30 days of delivery for unworn items.
-                </div>
-            </details>
-            
-            <details>
-                <summary>Reviews (3) <span>+</span></summary>
-                <div style="margin-top: 15px;">
-                    <div style="margin-bottom: 20px;">
-                        <div style="font-size: 11px; font-weight: 700;">ALEX J.</div>
-                        <div style="color: #FBBF24; font-size: 10px; margin: 3px 0;">★★★★★</div>
-                        <div style="font-size: 13px; color: #666;">Great quality, fits perfectly.</div>
-                    </div>
-                    <div>
-                        <div style="font-size: 11px; font-weight: 700;">SAM K.</div>
-                        <div style="color: #FBBF24; font-size: 10px; margin: 3px 0;">★★★★☆</div>
-                        <div style="font-size: 13px; color: #666;">Fast shipping, material is nice.</div>
-                    </div>
-                </div>
-            </details>
-        </div>
-    </div>
 </div>
 
 <script>
-    function changeImage(element, src) {
-        // Change Main Image
+    function changeImage(el, src) {
         const main = document.getElementById('mainImage');
         main.style.opacity = 0;
         setTimeout(() => {
             main.src = src;
             main.style.opacity = 1;
         }, 150);
+        document.querySelectorAll('.thumb-btn').forEach(btn => btn.classList.remove('active'));
+        el.classList.add('active');
+    }
 
-        // Update Active Border
-        document.querySelectorAll('.thumb-box').forEach(box => box.classList.remove('active'));
-        element.classList.add('active');
+    function updateQty(change) {
+        const input = document.getElementById('qtyInput');
+        let val = parseInt(input.value);
+        val += change;
+        if (val < 1) val = 1;
+        input.value = val;
     }
 </script>
 

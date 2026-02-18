@@ -397,15 +397,16 @@ class Product(db.Model):
 
 class Review(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False) # Changed to product_id
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    rating = db.Column(db.Integer, nullable=False) # 1-5
+    rating = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.String(100)) # Added title field
     comment = db.Column(db.Text)
     date_posted = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
     user = db.relationship('User', backref='reviews')
-    order = db.relationship('Order', backref=db.backref('review', uselist=False))
+    product = db.relationship('Product', backref='reviews')
 
 class PasswordHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -431,6 +432,33 @@ def is_password_strong(password):
     if not re.search(r"\d", password): return False, "Password must contain a number."
     if not re.search(r"[\W_]", password): return False, "Password must contain a symbol (e.g. !@#$)."
     return True, "Valid"
+
+def check_invoice_expiry():
+    """Checks for pending invoices older than 7 days and marks them expired."""
+    try:
+        # Calculate date 7 days ago
+        limit = datetime.utcnow() - timedelta(days=7)
+        
+        # Find pending invoices older than limit
+        expired_invoices = Invoice.query.filter(Invoice.status == 'Pending', Invoice.date_created < limit).all()
+        
+        if expired_invoices:
+            count = 0
+            for inv in expired_invoices:
+                inv.status = 'Expired'
+                # Attempt to restore stock (Match by Name since Product ID isn't in OrderItem)
+                if inv.order:
+                    for item in inv.order.items:
+                        prod = Product.query.filter_by(name=item.item_name).first()
+                        if prod:
+                            prod.stock += item.quantity
+                            prod.sales_count -= item.quantity
+                count += 1
+            
+            db.session.commit()
+            print(f"[SYSTEM] Expired {count} old pending invoices.")
+    except Exception as e:
+        print(f"[SYSTEM] Expiry Check Failed: {e}")
 
 def log_action(actor_type, actor_id, action, entity_type, entity_id, status, description):
     try:
@@ -1605,17 +1633,22 @@ def store_cart():
 @app.route('/cart/update', methods=['POST'])
 def update_cart():
     if 'cart' not in session: return redirect(url_for('store_cart'))
-    p_id = str(request.form.get('product_id'))
+    
+    # FIX: Look for 'cart_key' instead of 'product_id'
+    cart_key = request.form.get('cart_key')
     action = request.form.get('action')
     
-    if p_id in session['cart']:
-        if action == 'increase': session['cart'][p_id]['qty'] += 1
-        elif action == 'decrease': session['cart'][p_id]['qty'] -= 1
-        elif action == 'delete': del session['cart'][p_id]
+    if cart_key and cart_key in session['cart']:
+        if action == 'increase': 
+            session['cart'][cart_key]['qty'] += 1
+        elif action == 'decrease': 
+            session['cart'][cart_key]['qty'] -= 1
+        elif action == 'delete': 
+            del session['cart'][cart_key]
         
-        # Cleanup
-        if p_id in session['cart'] and session['cart'][p_id]['qty'] <= 0: 
-            del session['cart'][p_id]
+        # Auto-remove if quantity hits 0
+        if cart_key in session['cart'] and session['cart'][cart_key]['qty'] <= 0: 
+            del session['cart'][cart_key]
             
     session.modified = True
     return redirect(url_for('store_cart'))
@@ -1692,7 +1725,7 @@ def store_checkout():
             else:
                 payment_desc = f"{payment_type.title()}"
 
-            # 2. Capture Shipping (For Confirm Page Display Only - DB schema lacks address)
+            # 2. Capture Shipping
             shipping_info = {
                 'first_name': request.form.get('first_name'),
                 'last_name': request.form.get('last_name'),
@@ -1701,62 +1734,78 @@ def store_checkout():
                 'zip': request.form.get('zip')
             }
 
-            # 3. CREATE RECORDS IMMEDIATELY (Status: Pending)
-            # Find/Create Client
+            # 3. CREATE RECORDS
             client = Client.query.filter_by(email=g.user.email).first()
             if not client:
                 client = Client(name=f"{g.user.first_name} {g.user.last_name}", email=g.user.email, company="Online Customer")
                 db.session.add(client)
-                db.session.commit() # Commit to get ID
+                db.session.commit()
 
-            # Create Order
             order_code = f"ORD-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
-            # We append address to description since we don't have an address table
             full_desc = f"{payment_desc} | Ship to: {shipping_info['address']}"
             
             new_order = Order(
                 order_code=order_code, 
                 client_id=client.id,
-                description=full_desc[:200], # Truncate if too long
+                description=full_desc[:200],
                 amount=totals['grand_total'], 
-                status='Pending', # <--- Initially Pending
+                status='Pending',
                 date_placed=datetime.utcnow()
             )
             db.session.add(new_order)
             db.session.flush()
 
-            # Create Order Items & Deduct Stock
-            for p_id, item in session['cart'].items():
-                order_item = OrderItem(order_id=new_order.id, item_name=item['name'], quantity=item['qty'], unit_price=item['price'], total_price=item['price']*item['qty'])
+            # --- FIXED: Handle Composite Keys (e.g. "4-OneSize-Default") ---
+            for cart_key, item in session['cart'].items():
+                
+                # 1. Format Item Name with Variants (e.g., "T-Shirt (Red, L)")
+                display_name = item['name']
+                if 'size' in item and 'color' in item:
+                    display_name += f" ({item['color']}, {item['size']})"
+                elif 'size' in item:
+                    display_name += f" ({item['size']})"
+                
+                # 2. Create Order Item
+                order_item = OrderItem(
+                    order_id=new_order.id, 
+                    item_name=display_name, 
+                    quantity=item['qty'], 
+                    unit_price=item['price'], 
+                    total_price=item['price'] * item['qty']
+                )
                 db.session.add(order_item)
                 
-                # DEDUCT STOCK NOW
-                prod = Product.query.get(int(p_id))
-                if prod:
-                    prod.stock -= item['qty']
-                    prod.sales_count += item['qty']
-            
+                # 3. Extract Real Product ID for Stock Deduction
+                try:
+                    # If key is "4-Red-L", split gives ['4', 'Red', 'L'], index 0 is '4'
+                    real_p_id = int(str(cart_key).split('-')[0])
+                    prod = Product.query.get(real_p_id)
+                    if prod:
+                        prod.stock -= item['qty']
+                        prod.sales_count += item['qty']
+                except (ValueError, IndexError):
+                    print(f"Error deducting stock for key: {cart_key}")
+
             # Add Fees
             if totals['shipping'] > 0: 
                 db.session.add(OrderItem(order_id=new_order.id, item_name="Shipping Fee", quantity=1, unit_price=totals['shipping'], total_price=totals['shipping']))
             if totals['gst'] > 0: 
                 db.session.add(OrderItem(order_id=new_order.id, item_name="GST (9%)", quantity=1, unit_price=totals['gst'], total_price=totals['gst']))
 
-            # Create Invoice (Pending)
+            # Create Invoice
             inv_code = f"INV-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}"
             new_invoice = Invoice(
                 invoice_code=inv_code, 
                 order_id=new_order.id, 
                 client_id=client.id, 
                 amount=totals['grand_total'], 
-                status='Pending', # <--- Pending
+                status='Pending',
                 date_created=datetime.utcnow(), 
-                date_due=datetime.utcnow() + timedelta(days=7) # Due in 7 days
+                date_due=datetime.utcnow() + timedelta(days=7)
             )
             db.session.add(new_invoice)
             db.session.commit()
             
-            # 4. Save to Session for Confirmation Step
             session['confirm_order_id'] = new_order.id
             session['confirm_shipping'] = shipping_info
             
@@ -1879,37 +1928,75 @@ def store_review(order_code):
         
     return render_template('store_review.html', order=order)
 
+# [IN app.py - REPLACE THE store_product FUNCTION]
 @app.route('/product/<int:product_id>')
 def store_product(product_id):
     product = Product.query.get_or_404(product_id)
-    return render_template('store_product.html', product=product)
+    
+    # 1. Recommendations (Unchanged)
+    recommendations = Product.query.filter(
+        Product.category == product.category, 
+        Product.id != product_id
+    ).limit(4).all()
+    
+    # 2. Filter & Sort Reviews
+    rating_filter = request.args.get('rating')
+    sort_filter = request.args.get('sort', 'newest') # Default to newest
+    
+    query = Review.query.filter_by(product_id=product_id)
+    
+    # Apply Rating Filter
+    if rating_filter and rating_filter.isdigit():
+        query = query.filter(Review.rating == int(rating_filter))
+        
+    # Apply Sorting
+    if sort_filter == 'oldest':
+        query = query.order_by(Review.date_posted.asc())
+    elif sort_filter == 'highest':
+        query = query.order_by(Review.rating.desc())
+    elif sort_filter == 'lowest':
+        query = query.order_by(Review.rating.asc())
+    else: # newest
+        query = query.order_by(Review.date_posted.desc())
+        
+    reviews = query.all()
+    
+    # Calculate counts for the filter dropdowns (Optional polish)
+    reviews_count = len(reviews)
+    
+    return render_template('store_product.html', 
+                           product=product, 
+                           recommendations=recommendations, 
+                           reviews=reviews,
+                           current_rating=rating_filter,
+                           current_sort=sort_filter)
 
-def check_invoice_expiry():
-    """Checks for pending invoices older than 7 days and marks them expired."""
+@app.route('/product/add_review/<int:product_id>', methods=['POST'])
+def add_product_review(product_id):
+    if not g.user:
+        flash("Please log in to write a review.", "warning")
+        return redirect(url_for('store_auth'))
+        
     try:
-        # Calculate date 7 days ago
-        limit = datetime.utcnow() - timedelta(days=7)
+        rating = int(request.form.get('rating'))
+        title = request.form.get('title')
+        comment = request.form.get('comment')
         
-        # Find pending invoices older than limit
-        expired_invoices = Invoice.query.filter(Invoice.status == 'Pending', Invoice.date_created < limit).all()
-        
-        if expired_invoices:
-            count = 0
-            for inv in expired_invoices:
-                inv.status = 'Expired'
-                # Attempt to restore stock (Match by Name since Product ID isn't in OrderItem)
-                if inv.order:
-                    for item in inv.order.items:
-                        prod = Product.query.filter_by(name=item.item_name).first()
-                        if prod:
-                            prod.stock += item.quantity
-                            prod.sales_count -= item.quantity
-                count += 1
-            
-            db.session.commit()
-            print(f"[SYSTEM] Expired {count} old pending invoices.")
+        new_review = Review(
+            product_id=product_id,
+            user_id=g.user.id,
+            rating=rating,
+            title=title,
+            comment=comment
+        )
+        db.session.add(new_review)
+        db.session.commit()
+        flash("Review submitted successfully!", "success")
     except Exception as e:
-        print(f"[SYSTEM] Expiry Check Failed: {e}")
+        db.session.rollback()
+        flash(f"Error submitting review: {str(e)}", "danger")
+        
+    return redirect(url_for('store_product', product_id=product_id))
 
 # ==============================================================================
 # SECTION 7: ADMIN PANEL ROUTES (PRESERVED & FIXED LOGGING)
@@ -2240,8 +2327,38 @@ def edit_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     
     if request.method == 'POST':
-        invoice.status = request.form['status']
+        new_status = request.form['status']
+        old_status = invoice.status
+        
+        # 1. Update Invoice Details
+        invoice.status = new_status
         invoice.date_due = datetime.strptime(request.form['date_due'], '%Y-%m-%d')
+        
+        # 2. SYNC LOGIC: If Cancelled, update Order & Restock
+        if new_status == 'Cancelled' and old_status != 'Cancelled':
+            if invoice.order:
+                # This status change effectively "removes" it from the Orders List query
+                invoice.order.status = 'Cancelled'
+                
+                # Restore Stock
+                for item in invoice.order.items:
+                    prod = Product.query.filter_by(name=item.item_name).first()
+                    if prod:
+                        prod.stock += item.quantity
+                        prod.sales_count -= item.quantity
+                        
+        # 3. REACTIVATION LOGIC: If un-cancelling, set order back to active
+        elif new_status in ['Paid', 'Invoiced'] and old_status == 'Cancelled':
+            if invoice.order:
+                invoice.order.status = 'Invoiced' # Puts it back in the list
+                
+                # Re-deduct Stock
+                for item in invoice.order.items:
+                    prod = Product.query.filter_by(name=item.item_name).first()
+                    if prod:
+                        prod.stock -= item.quantity
+                        prod.sales_count += item.quantity
+
         db.session.commit()
         
         log_action('Admin', g.user.username, 'Edited Invoice', 'Invoice', invoice.invoice_code, 'Success', f'Status: {invoice.status}')
