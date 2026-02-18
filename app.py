@@ -406,6 +406,12 @@ class Review(db.Model):
     user = db.relationship('User', backref='reviews')
     order = db.relationship('Order', backref=db.backref('review', uselist=False))
 
+class PasswordHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    password_hash = db.Column(db.String(100), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
 # ==============================================================================
 # SECTION 5: HELPER FUNCTIONS
 # ==============================================================================
@@ -912,45 +918,54 @@ def store_verify():
             
     return render_template('store_verify.html', email=user.email, is_new_signup=is_new_signup)
 
-@app.route('/store/reset_password', methods=['GET', 'POST'])
-def store_reset_password():
-    """Step 3: User enters new password."""
-    # Security Check: Ensure user passed OTP in this session
-    reset_uid = session.get('reset_user_id')
-    if not reset_uid:
-        flash("Unauthorized access. Please verify your identity first.", "danger")
-        return redirect(url_for('store_auth'))
+@app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
+@admin_required
+def reset_password(user_id):
+    user = User.query.get_or_404(user_id)
     
-    if request.method == 'POST':
-        password = request.form.get('password')
-        confirm = request.form.get('confirm')
-        
-        if password != confirm:
-            flash("Passwords do not match.", "danger")
+    # 1. Capture Form Data
+    new_username = request.form.get('new_username')
+    new_email = request.form.get('new_email')
+    temp_password = request.form.get('temp_password')
+
+    # --- CHECK: Prevent reusing the CURRENT password as the TEMP password ---
+    if user.password.startswith('scrypt:') and check_password_hash(user.password, temp_password):
+        flash("Error: New password cannot be the same as the user's current password.", "danger")
+        return redirect(url_for('admin_panel'))
+    
+    # --- HISTORY FIX: Archive the OLD password before resetting ---
+    # This ensures they can't reuse the password they just "forgot"
+    if user.password and user.password.startswith('scrypt:'):
+        # Save the old hash to history
+        history_entry = PasswordHistory(user_id=user.id, password_hash=user.password)
+        db.session.add(history_entry)
+
+    # 2. Update User Record
+    if new_username: user.username = new_username
+    if new_email: user.email = new_email
+    
+    # Save the password (plain text for first login)
+    user.password = temp_password 
+    user.must_change_password = True
+    
+    db.session.commit()
+    
+    # 3. Determine Recipient & Send Email
+    recipient = new_email if new_email else user.email
+    
+    status_msg = ""
+    if recipient:
+        if send_temp_password_email(recipient, temp_password):
+            status_msg = f" Notification sent to {recipient}."
         else:
-            user = User.query.get(reset_uid)
-            # --- [NEW] PREVENT REUSE ---
-            if user.password.startswith('scrypt:') and check_password_hash(user.password, password):
-                flash("You cannot reuse your current password. Please choose a new one.", "danger")
-                return render_template('store_reset_password.html')
-            # ---------------------------
-            valid, msg = is_password_strong(password)
-            if not valid:
-                flash(f"Weak Password: {msg}", "danger")
-            else:
-                user = User.query.get(reset_uid)
-                user.password = generate_password_hash(password)
-                user.failed_attempts = 0 # Reset any locks
-                db.session.commit()
-                
-                # Auto Login the user
-                session['user_id'] = user.id
-                session.pop('reset_user_id', None)
-                
-                flash("Your password has been reset successfully.", "success")
-                return redirect(url_for('store_home'))
-                
-    return render_template('store_reset_password.html')
+            status_msg = " (Warning: Email failed to send. Check server logs.)"
+    else:
+        status_msg = " (No email address available to send notification.)"
+
+    # 4. Log & Redirect
+    log_action('Admin', g.user.username, 'Reset Password', 'User', user.username, 'Success', 'Admin reset credentials')
+    flash(f'Credentials updated for {user.username}.{status_msg}', 'success')
+    return redirect(url_for('admin_panel'))
 
 @app.route('/store/resend')
 def store_resend():
@@ -2501,27 +2516,26 @@ def change_password():
             flash("You must register a recovery email address to continue.", "danger")
             return render_template('change_password.html', user=user, email_required=True)
             
-        # 2. Prevent Password Reuse (ROBUST FIX)
-        is_reuse = False
+        # 2. Prevent Password Reuse (Current & History)
         
-        # Check A: Exact Plaintext Match (e.g., if Admin set a temp password securely or insecurely)
-        if user.password == new_pw:
-            is_reuse = True
-            
-        # Check B: Hash Match (Universal - works for scrypt, pbkdf2, etc.)
-        else:
-            try:
-                # This function handles the hash format automatically
-                if check_password_hash(user.password, new_pw):
-                    is_reuse = True
-            except ValueError:
-                # This happens if user.password is not a valid hash (e.g. plain text)
-                # We already checked plain text above, so we can ignore this.
-                pass
-
-        if is_reuse:
-            flash("For security, you cannot reuse your previous password.", "danger")
+        # A. Check against the CURRENT (Temp) Password
+        # If user.password is plain text (temp)
+        if user.password == new_pw: 
+            flash("You cannot reuse your temporary password.", "danger")
             return render_template('change_password.html', user=user, email_required=(not user.email))
+            
+        # If user.password is hashed (unlikely in this specific flow, but good practice)
+        if user.password.startswith('scrypt:') and check_password_hash(user.password, new_pw):
+            flash("You cannot reuse your current password.", "danger")
+            return render_template('change_password.html', user=user, email_required=(not user.email))
+
+        # B. Check against HISTORY (The Fix)
+        # Fetch last 5 passwords
+        past_passwords = PasswordHistory.query.filter_by(user_id=user.id).all()
+        for record in past_passwords:
+            if check_password_hash(record.password_hash, new_pw):
+                flash("You cannot reuse a previously used password.", "danger")
+                return render_template('change_password.html', user=user, email_required=(not user.email))
 
         # 3. Validate Password Strength
         valid, msg = is_password_strong(new_pw)
@@ -2533,7 +2547,13 @@ def change_password():
         if email_input:
             user.email = email_input
             
-        user.password = generate_password_hash(new_pw)
+        # Generate new hash
+        new_hash = generate_password_hash(new_pw)
+        
+        # Archive the NEW password immediately so it's in history for next time
+        db.session.add(PasswordHistory(user_id=user.id, password_hash=new_hash))
+        
+        user.password = new_hash
         user.must_change_password = False
         db.session.commit()
         
@@ -2544,49 +2564,6 @@ def change_password():
     force_email = (user.email is None or user.email == '')
     return render_template('change_password.html', user=user, email_required=force_email)
 
-@app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
-@admin_required
-def reset_password(user_id):
-    user = User.query.get_or_404(user_id)
-    
-    # 1. Capture Form Data
-    new_username = request.form.get('new_username')
-    new_email = request.form.get('new_email')
-    temp_password = request.form.get('temp_password')
-
-    # --- [NEW] PREVENT REUSE ---
-    if user.password.startswith('scrypt:') and check_password_hash(user.password, temp_password):
-        flash("Error: New password cannot be the same as the user's current password.", "danger")
-        return redirect(url_for('admin_panel'))
-    # ---------------------------
-    
-    # 2. Update User Record
-    if new_username: user.username = new_username
-    if new_email: user.email = new_email
-    
-    # Save the password (plain text for first login)
-    user.password = temp_password 
-    user.must_change_password = True
-    
-    db.session.commit()
-    
-    # 3. Determine Recipient & Send Email
-    # Priority: Use the email just typed in the box. Fallback: Use the user's saved email.
-    recipient = new_email if new_email else user.email
-    
-    status_msg = ""
-    if recipient:
-        if send_temp_password_email(recipient, temp_password):
-            status_msg = f" Notification sent to {recipient}."
-        else:
-            status_msg = " (Warning: Email failed to send. Check server logs.)"
-    else:
-        status_msg = " (No email address available to send notification.)"
-
-    # 4. Log & Redirect
-    log_action('Admin', g.user.username, 'Reset Password', 'User', user.username, 'Success', 'Admin reset credentials')
-    flash(f'Credentials updated for {user.username}.{status_msg}', 'success')
-    return redirect(url_for('admin_panel'))
 
 @app.route('/admin/suspend/<int:user_id>', methods=['POST'])
 @admin_required
