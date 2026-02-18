@@ -11,12 +11,11 @@
     :root {
         --primary: #2c3e50;
         --secondary: #7f8c8d;
-        --accent: #3498db;
         --border: #eaedf0;
         --bg: #f4f6f8;
         --success: #27ae60;
         --warning: #f39c12;
-        --danger: #dc2626; /* Added for Cancelled status */
+        --danger: #dc2626;
     }
     
     body {
@@ -25,21 +24,19 @@
         color: var(--primary);
     }
 
-    /* --- LAYOUT CONTAINERS --- */
     .layout-container {
         max-width: 900px;
         margin: 0 auto;
         padding: 0 20px; 
     }
 
-    /* --- TOP ACTION BAR --- */
+    /* --- ACTION BAR --- */
     .action-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin: 30px 0 20px 0;
     }
-
     .btn-back {
         display: inline-flex;
         align-items: center;
@@ -48,10 +45,7 @@
         color: var(--secondary);
         font-weight: 600;
         font-size: 14px;
-        transition: color 0.2s;
     }
-    .btn-back:hover { color: var(--primary); }
-
     .btn-print {
         background-color: var(--primary);
         color: white;
@@ -64,11 +58,7 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);
-        transition: transform 0.1s;
     }
-    .btn-print:hover { transform: translateY(-1px); background-color: #1a252f; }
-    .btn-print:active { transform: translateY(0); }
 
     /* --- INVOICE PAPER --- */
     .invoice-paper {
@@ -78,6 +68,7 @@
         box-shadow: 0 4px 20px rgba(0,0,0,0.06);
         border: 1px solid var(--border);
         margin-bottom: 50px;
+        position: relative;
     }
 
     /* --- HEADER GRID --- */
@@ -86,22 +77,41 @@
         grid-template-columns: 1fr auto; 
         gap: 20px;
         border-bottom: 2px solid var(--border);
-        padding-bottom: 40px;
+        padding-bottom: 30px;
         margin-bottom: 40px;
         align-items: start;
     }
 
     .branding h1 {
         margin: 0;
-        font-size: 26px;
+        font-size: 28px;
         text-transform: uppercase;
         letter-spacing: -0.5px;
         color: var(--primary);
     }
-    .branding .sub {
-        margin-top: 5px;
+    
+    /* MODIFIED: Stack Dates Vertically */
+    .invoice-dates {
+        margin-top: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px; /* Space between the two dates */
+    }
+    .date-item {
+        /* Keep label and value close */
+    }
+    .date-item label {
+        display: block;
+        font-size: 10px;
+        text-transform: uppercase;
         color: var(--secondary);
+        letter-spacing: 0.5px;
+        margin-bottom: 2px;
+    }
+    .date-item span {
         font-size: 14px;
+        font-weight: 600;
+        color: var(--primary);
     }
 
     .meta-details {
@@ -110,7 +120,6 @@
         flex-direction: column;
         gap: 15px; 
     }
-
     .meta-group label {
         display: block;
         font-size: 11px;
@@ -125,38 +134,11 @@
         color: var(--primary);
     }
 
-    /* --- BADGES --- */
-    .status-badge {
-        display: inline-block;
-        padding: 6px 14px;
-        border-radius: 50px;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .status-badge.paid {
-        background: #e8f8f5;
-        color: var(--success);
-        border: 1px solid #d1f2eb;
-    }
-    .status-badge.unpaid {
-        background: #fef5e7;
-        color: var(--warning);
-        border: 1px solid #fad7a0;
-    }
-    /* NEW: Cancelled Style */
-    .status-badge.cancelled {
-        background: #fee2e2;
-        color: var(--danger);
-        border: 1px solid #fecaca;
-    }
-
     /* --- ADDRESS SECTION --- */
     .address-row {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 50px;
+        margin-bottom: 40px;
     }
     .address-col h3 {
         font-size: 12px;
@@ -175,12 +157,15 @@
     }
 
     /* --- TABLE --- */
-    .table-responsive { width: 100%; margin-bottom: 30px; }
-    table { width: 100%; border-collapse: collapse; }
+    .table-responsive { width: 100%; }
+    table { 
+        width: 100%; 
+        border-collapse: collapse; 
+    }
     
     th {
         text-align: left;
-        padding: 12px 0;
+        padding: 12px 10px;
         border-bottom: 2px solid var(--border);
         color: var(--secondary);
         font-size: 11px;
@@ -188,52 +173,90 @@
         font-weight: 600;
     }
     td {
-        padding: 16px 0;
+        padding: 16px 10px;
         border-bottom: 1px solid var(--border);
         font-size: 14px;
+        vertical-align: top;
     }
+    
+    /* Pagination Safety */
+    tr {
+        page-break-inside: avoid;
+    }
+
     .text-right { text-align: right; }
     .text-center { text-align: center; }
 
-    /* --- TOTALS --- */
-    .totals-container {
-        display: flex;
-        justify-content: flex-end;
-    }
-    .totals-box { width: 300px; }
-    
-    .total-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        font-size: 14px;
+    /* --- TOTALS SECTION --- */
+    .totals-row td {
+        border-bottom: none;
+        padding: 8px 10px;
         color: var(--secondary);
     }
-    .total-row.grand {
+    .totals-row.grand-total td {
         border-top: 2px solid var(--primary);
-        margin-top: 10px;
-        padding-top: 15px;
         color: var(--primary);
         font-weight: 800;
-        font-size: 20px;
+        font-size: 18px;
+        padding-top: 15px;
+    }
+    .totals-label {
+        font-weight: 600;
     }
 
-    /* --- FOOTER --- */
+    /* --- STATUS BADGES --- */
+    .status-badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border-radius: 50px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .status-badge.paid { background: #e8f8f5; color: var(--success); border: 1px solid #d1f2eb; }
+    .status-badge.unpaid { background: #fef5e7; color: var(--warning); border: 1px solid #fad7a0; }
+    .status-badge.cancelled { background: #fee2e2; color: var(--danger); border: 1px solid #fecaca; }
+
     .invoice-footer {
-        margin-top: 60px;
-        padding-top: 30px;
+        margin-top: 50px;
+        padding-top: 20px;
         border-top: 1px solid var(--border);
         text-align: center;
         color: #95a5a6;
-        font-size: 13px;
+        font-size: 12px;
     }
 
-    /* --- PRINT HIDING --- */
+    /* =========================================
+       PRINT STYLES
+       ========================================= */
     @media print {
-        .no-print, header, .sidebar { display: none !important; }
-        .invoice-paper { box-shadow: none; border: none; margin: 0; padding: 0; }
-        .layout-container { max-width: 100%; padding: 0; }
-        body { background: white; }
+        @page { margin: 0; size: auto; }
+        body * { visibility: hidden; }
+        
+        /* Hide UI elements */
+        header, nav, .sidebar, .action-bar, .no-print { display: none !important; }
+
+        /* Show Invoice */
+        .invoice-paper, .invoice-paper * { visibility: visible; }
+
+        .invoice-paper {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 20mm; /* Standard Print Padding */
+            border: none;
+            box-shadow: none;
+        }
+
+        /* Pagination & Layout Logic */
+        tbody { page-break-after: auto; }
+        tr { page-break-inside: avoid; }
+        
+        /* Ensure specific elements don't get cut */
+        .totals-row { page-break-inside: avoid; }
+        .branding, .address-row { page-break-inside: avoid; }
     }
 </style>
 
@@ -241,18 +264,11 @@
 
     <div class="action-bar no-print">
         {% if is_customer_view %}
-            <a href="{{ url_for('store_profile') }}" class="btn-back">
-                <i class="fa-solid fa-arrow-left"></i> Back to Orders
-            </a>
+            <a href="{{ url_for('store_profile') }}" class="btn-back"><i class="fa-solid fa-arrow-left"></i> Back to Orders</a>
         {% else %}
-            <a href="{{ url_for('invoices') }}" class="btn-back">
-                <i class="fa-solid fa-arrow-left"></i> Back to Admin
-            </a>
+            <a href="{{ url_for('invoices') }}" class="btn-back"><i class="fa-solid fa-arrow-left"></i> Back to Admin</a>
         {% endif %}
-        
-        <button onclick="window.print()" class="btn-print">
-            <i class="fa-solid fa-download"></i> Download PDF
-        </button>
+        <button onclick="window.print()" class="btn-print"><i class="fa-solid fa-download"></i> Download PDF</button>
     </div>
 
     <div class="invoice-paper">
@@ -260,7 +276,17 @@
         <div class="header-grid">
             <div class="branding">
                 <h1>Shop.co</h1>
-                <div class="sub">Official Invoice</div>
+                
+                <div class="invoice-dates">
+                    <div class="date-item">
+                        <label>Date of Issue</label>
+                        <span>{{ invoice.date_created.strftime('%b %d, %Y') }}</span>
+                    </div>
+                    <div class="date-item">
+                        <label>Due Date</label>
+                        <span>{{ invoice.date_due.strftime('%b %d, %Y') if invoice.date_due else 'On Receipt' }}</span>
+                    </div>
+                </div>
             </div>
             
             <div class="meta-details">
@@ -269,7 +295,7 @@
                     <div class="value">#{{ invoice.invoice_code }}</div>
                 </div>
                 <div class="meta-group">
-                    <label>Payment Status</label>
+                    <label>Status</label>
                     <div class="value">
                         {% if invoice.status == 'Paid' %}
                             <span class="status-badge paid">Paid</span>
@@ -286,20 +312,14 @@
         <div class="address-row">
             <div class="address-col">
                 <h3>From</h3>
-                <p>
-                    <strong>Shop.co Inc.</strong><br>
-                    123 Fashion Street<br>
-                    Singapore, 560123
-                </p>
+                <p><strong>Shop.co Inc.</strong><br>123 Fashion Street<br>Singapore, 560123</p>
             </div>
             <div class="address-col" style="text-align: right;">
                 <h3>Bill To</h3>
                 <p>
                     <strong>{{ invoice.client.name }}</strong><br>
                     {{ invoice.client.email }}<br>
-                    {% if invoice.client.custom_id %}
-                    Client ID: {{ invoice.client.custom_id }}
-                    {% endif %}
+                    {% if invoice.client.custom_id %}Client ID: {{ invoice.client.custom_id }}{% endif %}
                 </p>
             </div>
         </div>
@@ -309,48 +329,58 @@
                 <thead>
                     <tr>
                         <th style="width: 50%;">Description</th>
-                        <th class="text-center">Qty</th>
-                        <th class="text-right">Unit Price</th>
-                        <th class="text-right">Amount</th>
+                        <th class="text-center" style="width: 10%;">Qty</th>
+                        <th class="text-right" style="width: 20%;">Unit Price</th>
+                        <th class="text-right" style="width: 20%;">Amount</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% if invoice.order %}
-                        {% for item in invoice.order.items %}
-                        <tr>
-                            <td>
-                                <strong>{{ item.item_name }}</strong>
-                                {% if item.variant %}<br><span style="color: #999; font-size: 12px;">{{ item.variant }}</span>{% endif %}
-                            </td>
-                            <td class="text-center">{{ item.quantity }}</td>
-                            <td class="text-right">${{ "%.2f"|format(item.unit_price) }}</td>
-                            <td class="text-right">${{ "%.2f"|format(item.total_price) }}</td>
-                        </tr>
-                        {% endfor %}
-                    {% else %}
-                        <tr>
-                            <td colspan="4" class="text-center" style="color: #999;">Manual Invoice (No items)</td>
-                        </tr>
+                    {% set ns = namespace(shipping=None, gst=None) %}
+                    
+                    {% for item in invoice.order.items %}
+                        {% if "Shipping Fee" in item.item_name %}
+                            {% set ns.shipping = item %}
+                        {% elif "GST" in item.item_name %}
+                            {% set ns.gst = item %}
+                        {% else %}
+                            <tr>
+                                <td>
+                                    <strong>{{ item.item_name }}</strong>
+                                    {% if item.variant %}<br><span style="color: #999; font-size: 12px;">{{ item.variant }}</span>{% endif %}
+                                </td>
+                                <td class="text-center">{{ item.quantity }}</td>
+                                <td class="text-right">${{ "%.2f"|format(item.unit_price) }}</td>
+                                <td class="text-right">${{ "%.2f"|format(item.total_price) }}</td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    <tr><td colspan="4" style="padding: 20px 0; border: none;"></td></tr>
+
+                    {% if ns.shipping %}
+                    <tr class="totals-row">
+                        <td colspan="2" style="border: none;"></td>
+                        <td class="text-right totals-label">Shipping Fee</td>
+                        <td class="text-right">${{ "%.2f"|format(ns.shipping.total_price) }}</td>
+                    </tr>
                     {% endif %}
+
+                    {% if ns.gst %}
+                    <tr class="totals-row">
+                        <td colspan="2" style="border: none;"></td>
+                        <td class="text-right totals-label">GST (9%)</td>
+                        <td class="text-right">${{ "%.2f"|format(ns.gst.total_price) }}</td>
+                    </tr>
+                    {% endif %}
+
+                    <tr class="totals-row grand-total">
+                        <td colspan="2" style="border: none;"></td>
+                        <td class="text-right">Total</td>
+                        <td class="text-right">${{ "%.2f"|format(invoice.amount) }}</td>
+                    </tr>
+
                 </tbody>
             </table>
-        </div>
-
-        <div class="totals-container">
-            <div class="totals-box">
-                <div class="total-row">
-                    <span>Issue Date</span>
-                    <span>{{ invoice.date_created.strftime('%b %d, %Y') }}</span>
-                </div>
-                <div class="total-row">
-                    <span>Due Date</span>
-                    <span>{{ invoice.date_due.strftime('%b %d, %Y') if invoice.date_due else 'N/A' }}</span>
-                </div>
-                <div class="total-row grand">
-                    <span>Total Due</span>
-                    <span>${{ "%.2f"|format(invoice.amount) }}</span>
-                </div>
-            </div>
         </div>
 
         <div class="invoice-footer">
@@ -360,10 +390,11 @@
 </div>
 
 <script>
-    // Log Download (Optional: only if route exists)
     {% if url_for('log_invoice_download', invoice_id=invoice.id) %}
     window.onbeforeprint = function() {
-        fetch("{{ url_for('log_invoice_download', invoice_id=invoice.id) }}", { method: 'POST' });
+        const url = "{{ url_for('log_invoice_download', invoice_id=invoice.id) }}";
+        if (navigator.sendBeacon) { navigator.sendBeacon(url); } 
+        else { fetch(url, { method: 'POST' }); }
     };
     {% endif %}
 </script>
