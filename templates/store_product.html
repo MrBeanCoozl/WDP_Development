@@ -1,63 +1,304 @@
 {% extends "store_base.html" %}
 {% block content %}
-<div class="container" style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 80px; align-items: start; padding-top: 60px;">
+
+<style>
+    /* PREMIUM PRODUCT LAYOUT */
+    .product-container {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 60px;
+        padding-top: 40px;
+        padding-bottom: 80px;
+        align-items: start;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    /* GALLERY SECTION */
+    .gallery-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
     
-    <div style="background: #f9f9f9; aspect-ratio: 1/1.2; border-radius: 4px; overflow: hidden;">
-        <img src="{{ product.image_url }}" style="width: 100%; height: 100%; object-fit: cover;">
+    .main-stage {
+        background: #f4f4f5;
+        aspect-ratio: 1/1.25; /* Modern vertical ratio */
+        border-radius: 4px;
+        overflow: hidden;
+        cursor: crosshair;
+    }
+    
+    .main-stage img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.5s ease;
+    }
+    
+    .main-stage:hover img {
+        transform: scale(1.05);
+    }
+
+    .thumb-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+    }
+
+    .thumb-box {
+        aspect-ratio: 1/1;
+        background: #f4f4f5;
+        border-radius: 4px;
+        overflow: hidden;
+        cursor: pointer;
+        opacity: 0.6;
+        border: 1px solid transparent;
+        transition: all 0.2s;
+    }
+
+    .thumb-box.active, .thumb-box:hover {
+        opacity: 1;
+        border-color: #000;
+    }
+
+    .thumb-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* DETAILS SECTION */
+    .details-panel {
+        position: sticky;
+        top: 100px; /* Sticks below navbar */
+    }
+
+    .p-category {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #888;
+        letter-spacing: 1px;
+        margin-bottom: 10px;
+    }
+
+    .p-title {
+        font-size: 32px;
+        font-weight: 800;
+        line-height: 1.1;
+        margin: 0 0 15px;
+        letter-spacing: -1px;
+    }
+
+    .p-price {
+        font-size: 22px;
+        font-weight: 500;
+        color: #111;
+        margin-bottom: 30px;
+    }
+
+    /* SELECTORS */
+    .selector-block { margin-bottom: 25px; }
+    .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; display: block; letter-spacing: 0.5px; }
+    
+    .color-list { display: flex; gap: 10px; flex-wrap: wrap; }
+    .color-opt { cursor: pointer; }
+    .color-opt input { display: none; }
+    .color-swatch { 
+        padding: 8px 16px; 
+        border: 1px solid #e5e5e5; 
+        font-size: 12px; 
+        font-weight: 500; 
+        background: #fff; 
+        transition: 0.2s; 
+    }
+    .color-opt input:checked + .color-swatch { background: #000; color: #fff; border-color: #000; }
+    .color-opt:hover .color-swatch { border-color: #000; }
+
+    .size-list { display: flex; gap: 8px; flex-wrap: wrap; }
+    .size-opt { cursor: pointer; }
+    .size-opt input { display: none; }
+    .size-box {
+        width: 45px; height: 45px;
+        display: flex; align-items: center; justify-content: center;
+        border: 1px solid #e5e5e5;
+        font-size: 12px; font-weight: 600;
+        transition: 0.2s;
+    }
+    .size-opt input:checked + .size-box { background: #000; color: #fff; border-color: #000; }
+    .size-opt:hover .size-box { border-color: #000; }
+
+    /* ACTION BUTTONS */
+    .add-row {
+        display: grid;
+        grid-template-columns: 70px 1fr;
+        gap: 15px;
+        margin-bottom: 40px;
+        margin-top: 30px;
+    }
+
+    .qty-input {
+        width: 100%; height: 50px;
+        text-align: center;
+        border: 1px solid #e5e5e5;
+        font-size: 16px; font-weight: 600;
+        outline: none;
+    }
+
+    .add-btn {
+        background: #000;
+        color: #fff;
+        border: none;
+        font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+    .add-btn:hover { background: #333; }
+
+    /* ACCORDION (Details) */
+    .accordion-group { border-top: 1px solid #e5e5e5; margin-top: 20px; }
+    details {
+        border-bottom: 1px solid #e5e5e5;
+        padding: 22px 0;
+        cursor: pointer;
+    }
+    summary {
+        font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+        list-style: none;
+        display: flex; justify-content: space-between; align-items: center;
+        outline: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary span { font-size: 16px; font-weight: 400; }
+    
+    details p, details div {
+        font-size: 14px; line-height: 1.7; color: #555;
+        margin-top: 15px;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) {
+        .product-container { grid-template-columns: 1fr; gap: 40px; }
+        .details-panel { position: static; }
+    }
+</style>
+
+<div class="container product-container">
+    
+    <div class="gallery-wrapper">
+        {% set images = product.image_url.split('|') %}
+        
+        <div class="main-stage">
+            <img id="mainImage" src="{{ images[0].strip() }}" alt="{{ product.name }}">
+        </div>
+
+        {% if images|length > 1 %}
+        <div class="thumb-grid">
+            {% for img in images %}
+            <div class="thumb-box {% if loop.first %}active{% endif %}" onclick="changeImage(this, '{{ img.strip() }}')">
+                <img src="{{ img.strip() }}" alt="Thumbnail">
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 
-    <div style="position: sticky; top: 120px;">
-        <div style="font-size: 12px; font-weight: 600; color: #999; text-transform: uppercase; margin-bottom: 10px;">{{ product.category }}</div>
-        <h1 style="font-size: 36px; font-weight: 800; margin: 0 0 15px; letter-spacing: -1px;">{{ product.name }}</h1>
-        <div style="font-size: 24px; font-weight: 500; margin-bottom: 30px;">${{ "%.2f"|format(product.price) }}</div>
+    <div class="details-panel">
+        <div class="p-category">{{ product.category }}</div>
+        <h1 class="p-title">{{ product.name }}</h1>
+        <div class="p-price">${{ "%.2f"|format(product.price) }}</div>
 
-        <form action="{{ url_for('store_cart') }}" method="POST" style="margin-bottom: 40px;">
+        <form action="{{ url_for('store_cart') }}" method="POST">
             <input type="hidden" name="product_id" value="{{ product.id }}">
-            <div style="display: grid; grid-template-columns: 80px 1fr; gap: 15px;">
-                <input type="number" name="quantity" value="1" min="1" 
-                       style="padding: 15px; text-align: center; border: 1px solid #ddd; font-weight: 600; outline: none;">
-                <button type="submit" class="btn" style="width: 100%; border-radius: 0;">Add to Cart</button>
+
+            {% if product.colors %}
+            <div class="selector-block">
+                <label class="lbl">Color: <span id="colorLabel" style="font-weight:400; color:#666;">Select</span></label>
+                <div class="color-list">
+                    {% for color in product.colors.split(',') %}
+                    <label class="color-opt">
+                        <input type="radio" name="color" value="{{ color.strip() }}" required onchange="document.getElementById('colorLabel').innerText = this.value">
+                        <div class="color-swatch">{{ color.strip() }}</div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+                <input type="hidden" name="color" value="Default">
+            {% endif %}
+
+            {% if product.sizes %}
+            <div class="selector-block">
+                <label class="lbl">Size</label>
+                <div class="size-list">
+                    {% for size in product.sizes.split(',') %}
+                    <label class="size-opt">
+                        <input type="radio" name="size" value="{{ size.strip() }}" required>
+                        <div class="size-box">{{ size.strip() }}</div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+                <input type="hidden" name="size" value="One Size">
+            {% endif %}
+
+            <div class="add-row">
+                <input type="number" name="quantity" value="1" min="1" class="qty-input">
+                <button type="submit" class="add-btn">Add to Bag</button>
             </div>
         </form>
 
-        <div style="border-top: 1px solid #eee;">
-            <details open style="border-bottom: 1px solid #eee; padding: 20px 0; cursor: pointer;">
-                <summary style="font-size: 13px; font-weight: 700; text-transform: uppercase; list-style: none; display: flex; justify-content: space-between;">
-                    Description <span>+</span>
-                </summary>
-                <p style="font-size: 14px; line-height: 1.6; color: #555; margin-top: 15px;">
-                    {{ product.description }}<br><br>
-                    Designed for the modern wardrobe, featuring premium materials and a tailored fit.
-                </p>
+        <div class="accordion-group">
+            <details open>
+                <summary>Description <span>+</span></summary>
+                <p>{{ product.description }}</p>
             </details>
             
-            <details style="border-bottom: 1px solid #eee; padding: 20px 0; cursor: pointer;">
-                <summary style="font-size: 13px; font-weight: 700; text-transform: uppercase; list-style: none; display: flex; justify-content: space-between;">
-                    Shipping & Returns <span>+</span>
-                </summary>
-                <div style="font-size: 13px; color: #666; margin-top: 15px;">
-                    Free shipping on orders over $150. Returns accepted within 30 days of delivery.
+            <details>
+                <summary>Shipping & Returns <span>+</span></summary>
+                <div>
+                    Free shipping on orders over $150. International shipping available. Returns accepted within 30 days of delivery for unworn items.
                 </div>
             </details>
             
-            <details style="border-bottom: 1px solid #eee; padding: 20px 0; cursor: pointer;">
-                <summary style="font-size: 13px; font-weight: 700; text-transform: uppercase; list-style: none; display: flex; justify-content: space-between;">
-                    Reviews (3) <span>+</span>
-                </summary>
-                <div style="margin-top: 20px;">
+            <details>
+                <summary>Reviews (3) <span>+</span></summary>
+                <div style="margin-top: 15px;">
                     <div style="margin-bottom: 20px;">
-                        <div style="font-size: 12px; font-weight: 700;">ALEX J.</div>
-                        <div style="color: gold; font-size: 10px; margin: 2px 0;">★★★★★</div>
-                        <div style="font-size: 13px; color: #555;">Great quality, fits perfectly.</div>
+                        <div style="font-size: 11px; font-weight: 700;">ALEX J.</div>
+                        <div style="color: #FBBF24; font-size: 10px; margin: 3px 0;">★★★★★</div>
+                        <div style="font-size: 13px; color: #666;">Great quality, fits perfectly.</div>
                     </div>
                     <div>
-                        <div style="font-size: 12px; font-weight: 700;">SAM K.</div>
-                        <div style="color: gold; font-size: 10px; margin: 2px 0;">★★★★☆</div>
-                        <div style="font-size: 13px; color: #555;">Fast shipping, material is nice.</div>
+                        <div style="font-size: 11px; font-weight: 700;">SAM K.</div>
+                        <div style="color: #FBBF24; font-size: 10px; margin: 3px 0;">★★★★☆</div>
+                        <div style="font-size: 13px; color: #666;">Fast shipping, material is nice.</div>
                     </div>
                 </div>
             </details>
         </div>
     </div>
 </div>
+
+<script>
+    function changeImage(element, src) {
+        // Change Main Image
+        const main = document.getElementById('mainImage');
+        main.style.opacity = 0;
+        setTimeout(() => {
+            main.src = src;
+            main.style.opacity = 1;
+        }, 150);
+
+        // Update Active Border
+        document.querySelectorAll('.thumb-box').forEach(box => box.classList.remove('active'));
+        element.classList.add('active');
+    }
+</script>
+
 {% endblock %}

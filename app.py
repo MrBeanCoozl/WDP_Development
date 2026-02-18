@@ -388,11 +388,12 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False)
     category = db.Column(db.String(50))
-    image_url = db.Column(db.String(200))
+    image_url = db.Column(db.Text) 
     description = db.Column(db.String(500))
     stock = db.Column(db.Integer, default=100)
     sales_count = db.Column(db.Integer, default=0)
-    sizes = db.Column(db.String(200))
+    sizes = db.Column(db.String(200)) 
+    colors = db.Column(db.String(200))
 
 class Review(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -440,78 +441,38 @@ def log_action(actor_type, actor_id, action, entity_type, entity_id, status, des
         db.session.rollback()
         print(f"Logging Failed: {e}")
 def seed_products():
-    """Adds dummy products to the database if none exist."""
+    """Seeds the DB with premium products containing multiple images and variants."""
     if Product.query.count() == 0:
-        print("Seeding Database with Products...")
+        print("Seeding Database with Premium Variants...")
         products = [
             Product(
-                name="Classic White Tee", 
-                price=29.90, 
-                category="Casual", 
-                image_url="https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="A staple for every wardrobe. Made from 100% organic cotton.",
-                stock=50, sizes="S,M,L,XL"
+                name="90s Vintage Baggy Jeans", price=65.00, category="Bottoms", 
+                image_url="https://images.unsplash.com/photo-1541099649105-f69ad21f3246?q=80&w=1000|https://images.unsplash.com/photo-1542272617-0858607c22f7?q=80&w=1000|https://images.unsplash.com/photo-1584370848010-d7d637167ebf?q=80&w=1000",
+                description="Heavyweight denim with a relaxed 90s cut.", stock=50, 
+                sizes="28,30,32,34,36", colors="Washed Blue,Vintage Black,Grey"
             ),
             Product(
-                name="Urban Denim Jacket", 
-                price=89.00, 
-                category="Casual", 
-                image_url="https://images.unsplash.com/photo-1551537482-f2075a1d41f2?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="Vintage wash denim jacket with a modern fit.",
-                stock=30, sizes="M,L,XL"
+                name="Essential Oversized Hoodie", price=85.00, category="Tops", 
+                image_url="https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=1000|https://images.unsplash.com/photo-1620799140408-ed5341cd2431?q=80&w=1000",
+                description="400gsm french terry cotton. Drop shoulder fit.", stock=40, 
+                sizes="S,M,L,XL,XXL", colors="Jet Black,Heather Grey,Cream"
             ),
             Product(
-                name="Oxford Button-Down", 
-                price=59.50, 
-                category="Formal", 
-                image_url="https://images.unsplash.com/photo-1598033129183-c4f50c736f10?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="Crisp, clean, and professional. Perfect for the office.",
-                stock=40, sizes="S,M,L,XL"
+                name="Street Runner V2", price=120.00, category="Shoes", 
+                image_url="https://images.unsplash.com/photo-1552346154-21d32810aba3?q=80&w=1000|https://images.unsplash.com/photo-1560769629-975ec94e6a86?q=80&w=1000",
+                description="Chunky silhouette with reactive foam cushioning.", stock=20, 
+                sizes="US 7,US 8,US 9,US 10,US 11", colors="White/Red,Triple Black"
             ),
             Product(
-                name="Slim Fit Chinos", 
-                price=49.90, 
-                category="Formal", 
-                image_url="https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="Versatile chinos that work for both casual and formal occasions.",
-                stock=45, sizes="30,32,34,36"
-            ),
-            Product(
-                name="Minimalist Sneakers", 
-                price=120.00, 
-                category="Shoes", 
-                image_url="https://images.unsplash.com/photo-1560769629-975ec94e6a86?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="Clean lines and premium leather for everyday comfort.",
-                stock=25, sizes="US 8,9,10,11"
-            ),
-            Product(
-                name="Leather Weekender", 
-                price=195.00, 
-                category="Accessories", 
-                image_url="https://images.unsplash.com/photo-1553062407-98eeb64c6a62?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="The perfect bag for short trips. Durable and stylish.",
-                stock=15, sizes="One Size"
-            ),
-            Product(
-                name="Summer Floral Dress", 
-                price=79.00, 
-                category="Casual", 
-                image_url="https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="Lightweight and breezy, perfect for warm weather.",
-                stock=35, sizes="S,M,L"
-            ),
-            Product(
-                name="Classic Chelsea Boots", 
-                price=145.00, 
-                category="Shoes", 
-                image_url="https://images.unsplash.com/photo-1638247025967-b4e38f787b76?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-                description="Timeless style with durable construction.",
-                stock=20, sizes="US 8,9,10,11"
+                name="Minimalist Silver Chain", price=45.00, category="Accessories", 
+                image_url="https://images.unsplash.com/photo-1611085583191-a3b181a88401?q=80&w=1000",
+                description="Sterling silver curb chain. 20 inch length.", stock=50, 
+                sizes="", colors=""
             )
         ]
         db.session.add_all(products)
         db.session.commit()
-        print("Products Added!")
+        print("Premium Products Added!")
 
 # app.py - Add to Section 5
 
@@ -1593,43 +1554,52 @@ def store_cart():
     if request.method == 'POST':
         p_id = request.form.get('product_id')
         qty = int(request.form.get('quantity', 1))
-        product = Product.query.get(p_id)
+        size = request.form.get('size', 'One Size')
+        color = request.form.get('color', 'Default')
         
+        # Sanitize inputs
+        if not size or size == 'None': size = 'One Size'
+        if not color or color == 'None': color = 'Default'
+
+        product = Product.query.get(p_id)
         if product:
             cart = session['cart']
-            p_id_str = str(p_id)
-            if p_id_str in cart: 
-                cart[p_id_str]['qty'] += qty
+            # Create Unique Key: ProductID-Size-Color
+            cart_key = f"{p_id}-{size.replace(' ','')}-{color.replace(' ','')}"
+            
+            if cart_key in cart: 
+                cart[cart_key]['qty'] += qty
             else:
-                cart[p_id_str] = {
+                cart[cart_key] = {
+                    'product_id': p_id,
                     'name': product.name, 
                     'price': product.price, 
                     'qty': qty, 
-                    'image': product.image_url, 
-                    'category': product.category
+                    'image': product.image_url.split('|')[0], 
+                    'category': product.category,
+                    'size': size,
+                    'color': color
                 }
             session.modified = True
             
-            # --- AJAX RESPONSE (Prevents Page Refresh) ---
-            # If the browser sent this via JS fetch/AJAX
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                cart_count = sum(item['qty'] for item in cart.values())
-                return json.dumps({
-                    'status': 'success', 
-                    'cart_count': cart_count, 
-                    'message': f'Added {product.name}'
-                })
+                return json.dumps({'status': 'success', 'cart_count': sum(i['qty'] for i in cart.values())})
             
-            # Fallback for non-JS browsers
-            flash(f'Added {product.name} to cart!', 'success')
             return redirect(request.referrer or url_for('store_cart'))
         
     totals = calculate_cart_totals(session['cart'])
+    
+    # Prepare items for display (fetching variant options for the dropdowns)
     cart_items = []
-    for p_id, item in session['cart'].items():
+    for key, item in session['cart'].items():
+        item['key'] = key
         item['total'] = item['price'] * item['qty']
-        item['id'] = p_id
+        prod = Product.query.get(item['product_id'])
+        if prod:
+            item['all_sizes'] = prod.sizes.split(',') if prod.sizes else []
+            item['all_colors'] = prod.colors.split(',') if prod.colors else []
         cart_items.append(item)
+        
     return render_template('store_cart.html', cart_items=cart_items, totals=totals)
 
 @app.route('/cart/update', methods=['POST'])
@@ -1648,6 +1618,35 @@ def update_cart():
             del session['cart'][p_id]
             
     session.modified = True
+    return redirect(url_for('store_cart'))
+
+@app.route('/cart/edit_variant', methods=['POST'])
+def edit_cart_variant():
+    if 'cart' not in session: return redirect(url_for('store_cart'))
+    
+    old_key = request.form.get('cart_key')
+    new_size = request.form.get('new_size')
+    new_color = request.form.get('new_color')
+    
+    if old_key in session['cart']:
+        item = session['cart'][old_key]
+        p_id = item['product_id']
+        
+        # Generate new key and merge if exists
+        new_key = f"{p_id}-{new_size.replace(' ','')}-{new_color.replace(' ','')}"
+        
+        if new_key != old_key:
+            if new_key in session['cart']:
+                session['cart'][new_key]['qty'] += item['qty']
+            else:
+                new_item = item.copy()
+                new_item['size'] = new_size
+                new_item['color'] = new_color
+                session['cart'][new_key] = new_item
+            
+            del session['cart'][old_key]
+            session.modified = True
+            
     return redirect(url_for('store_cart'))
 
 # ==============================================================================

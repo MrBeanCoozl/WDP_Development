@@ -127,31 +127,42 @@
             <div class="cart-items">
                 {% for item in cart_items %}
                 <div class="cart-row">
-                    <img src="{{ item.image }}" class="item-img">
+                    <div class="cart-img-box">
+                        <img src="{{ item.image }}" style="width:100px; height:120px; object-fit:cover;">
+                    </div>
                     
-                    <div class="item-info">
-                        <div class="item-cat">{{ item.category }}</div>
+                    <div class="cart-info">
                         <h3>{{ item.name }}</h3>
-                        <div class="item-price">${{ "%.2f"|format(item.price) }}</div>
                         
-                        <div style="display: flex; align-items: flex-end;">
-                            <form action="{{ url_for('update_cart') }}" method="POST" class="qty-control">
-                                <input type="hidden" name="product_id" value="{{ item.id }}">
-                                <button type="submit" name="action" value="decrease" class="qty-btn"><i class="fa-solid fa-minus"></i></button>
-                                <span class="qty-display">{{ item.qty }}</span>
-                                <button type="submit" name="action" value="increase" class="qty-btn"><i class="fa-solid fa-plus"></i></button>
-                            </form>
-                            
-                            <form action="{{ url_for('update_cart') }}" method="POST">
-                                <input type="hidden" name="product_id" value="{{ item.id }}">
-                                <button type="submit" name="action" value="delete" class="btn-delete">Remove</button>
+                        <form action="{{ url_for('edit_cart_variant') }}" method="POST">
+                            <input type="hidden" name="cart_key" value="{{ item.key }}">
+                            <div style="display:flex; gap:10px; margin: 5px 0;">
+                                {% if item.all_sizes %}
+                                <select name="new_size" onchange="this.form.submit()" style="padding:5px;">
+                                    {% for s in item.all_sizes %}
+                                        <option value="{{ s.strip() }}" {% if s.strip() == item.size %}selected{% endif %}>{{ s.strip() }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                                
+                                {% if item.all_colors %}
+                                <select name="new_color" onchange="this.form.submit()" style="padding:5px;">
+                                    {% for c in item.all_colors %}
+                                        <option value="{{ c.strip() }}" {% if c.strip() == item.color %}selected{% endif %}>{{ c.strip() }}</option>
+                                    {% endfor %}
+                                </select>
+                                {% endif %}
+                            </div>
+                        </form>
+
+                        <div style="margin-top: 10px;">
+                            <form action="{{ url_for('update_cart') }}" method="POST" style="display:inline;">
+                                <input type="hidden" name="cart_key" value="{{ item.key }}">
+                                <button name="action" value="delete" style="color:red; background:none; border:none; cursor:pointer;">Remove</button>
                             </form>
                         </div>
                     </div>
-
-                    <div style="text-align: right; font-weight: 700;">
-                        ${{ "%.2f"|format(item.total) }}
-                    </div>
+                    <div class="price">${{ "%.2f"|format(item.total) }}</div>
                 </div>
                 {% endfor %}
             </div>
