@@ -1951,10 +1951,74 @@ def store_checkout_cancel():
 def store_checkout_success(order_code):
     if not g.user: return redirect(url_for('store_auth'))
     
-    # Optional: Fetch order if you want to display details (e.g. "Thanks, [Name]")
     order = Order.query.filter_by(order_code=order_code).first()
     
-    return render_template('store_checkout_success.html', order_code=order_code, order=order)
+    # --- UPDATED LOGIC: FILTER OUT ALREADY REVIEWED ITEMS ---
+    reviewable_items = []
+    if order:
+        for item in order.items:
+            # Clean name logic (matches "Product Name (Size)" -> "Product Name")
+            base_name = item.item_name.split(' (')[0]
+            product = Product.query.filter_by(name=base_name).first()
+            
+            if product:
+                # CHECK DATABASE: Has user already reviewed this product?
+                existing_review = Review.query.filter_by(
+                    user_id=g.user.id, 
+                    product_id=product.id
+                ).first()
+                
+                # Only add to list if NO review exists
+                if not existing_review:
+                    reviewable_items.append({
+                        'product_id': product.id,
+                        'name': item.item_name
+                    })
+    
+    return render_template('store_checkout_success.html', order_code=order_code, order=order, reviewable_items=reviewable_items)
+
+@app.route('/review/submit_checkout', methods=['POST'])
+def submit_checkout_review():
+    if not g.user:
+        flash("Please log in to review.", "warning")
+        return redirect(url_for('store_auth'))
+        
+    try:
+        # 1. Capture Data
+        product_id = request.form.get('product_id')
+        rating = request.form.get('rating')
+        title = request.form.get('title')
+        comment = request.form.get('comment')
+        order_code = request.form.get('order_code')
+        
+        if not product_id or not rating:
+            flash("Please select an item and a rating.", "danger")
+            return redirect(url_for('store_checkout_success', order_code=order_code))
+
+        # 2. Create Review
+        new_review = Review(
+            product_id=int(product_id),
+            user_id=g.user.id,
+            rating=int(rating),
+            title=title if title else f"Review by {g.user.first_name}",
+            comment=comment,
+            date_posted=datetime.utcnow()
+        )
+        
+        db.session.add(new_review)
+        db.session.commit()
+        
+        # 3. Log Action
+        log_action('Customer', g.user.username, 'Created Review', 'Product', product_id, 'Success', 'Review from Checkout')
+        
+        # 4. REDIRECT BACK TO LOOP (Enable reviewing the next item)
+        flash("Review submitted! You can review another item or click Done.", "success")
+        return redirect(url_for('store_checkout_success', order_code=order_code))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error submitting review: {str(e)}", "danger")
+        return redirect(url_for('store_home'))
 
 @app.route('/review/<order_code>', methods=['GET', 'POST'])
 def store_review(order_code):

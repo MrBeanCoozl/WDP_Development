@@ -1,196 +1,371 @@
 {% extends "store_base.html" %}
 
-{% block title %}About Us | Shop.co{% endblock %}
+{% block title %}Our Story | Shop.co{% endblock %}
 
 {% block content %}
 
 <style>
-    /* PREMIUM HERO SECTION */
+    /* --- ANIMATIONS --- */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .reveal-on-scroll {
+        opacity: 0;
+        transform: translateY(40px);
+        transition: all 1s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .reveal-on-scroll.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* --- PREMIUM HERO SECTION --- */
     .about-hero {
-        background-color: #f4f4f5;
-        height: 60vh;
-        min-height: 400px;
+        position: relative;
+        height: 80vh; /* Taller hero for impact */
+        min-height: 500px;
         display: flex;
         align-items: center;
         justify-content: center;
         text-align: center;
-        margin-bottom: 80px;
-        position: relative;
+        color: white;
         overflow: hidden;
-    }
-    .about-hero h1 {
-        font-size: 56px;
-        font-weight: 800;
-        letter-spacing: -2px;
-        margin: 0;
-        color: #111;
-        z-index: 2;
-        position: relative;
-    }
-    .about-hero p {
-        font-size: 18px;
-        color: #555;
-        margin-top: 20px;
-        max-width: 600px;
-        line-height: 1.6;
+        background-color: #111;
     }
 
-    /* GRID SECTIONS */
+    /* Background Image with Parallax-like fix */
+    .about-hero-bg {
+        position: absolute;
+        inset: 0;
+        background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069&auto=format&fit=crop');
+        background-size: cover;
+        background-position: center;
+        opacity: 0.6;
+        transition: transform 10s ease;
+    }
+    .about-hero:hover .about-hero-bg {
+        transform: scale(1.05); /* Subtle zoom effect */
+    }
+
+    .hero-content {
+        position: relative;
+        z-index: 2;
+        max-width: 800px;
+        padding: 0 20px;
+        /* Animation on load */
+        animation: fadeInUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .about-hero h1 {
+        font-size: clamp(40px, 6vw, 72px); /* Responsive Font Size */
+        font-weight: 800;
+        letter-spacing: -2px;
+        margin-bottom: 20px;
+        line-height: 1.1;
+        text-transform: uppercase;
+    }
+
+    .about-hero p {
+        font-size: clamp(16px, 2vw, 20px);
+        color: rgba(255, 255, 255, 0.9);
+        line-height: 1.6;
+        font-weight: 300;
+        margin: 0 auto;
+        max-width: 600px; /* Fixed alignment issue by constraining width */
+    }
+
+    /* --- STORY SECTIONS --- */
+    .section-pad {
+        padding: 120px 0;
+    }
+
     .about-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 80px;
+        gap: 100px; /* More whitespace = More premium */
         align-items: center;
-        margin-bottom: 120px;
-    }
-    .about-content h2 {
-        font-size: 32px;
-        font-weight: 700;
-        margin-bottom: 25px;
-        letter-spacing: -1px;
-    }
-    .about-content p {
-        font-size: 16px;
-        color: #555;
-        line-height: 1.8;
-        margin-bottom: 20px;
-    }
-    .about-image {
-        width: 100%;
-        height: 500px;
-        background-color: #e5e5e5;
-        object-fit: cover;
-        border-radius: 4px;
     }
 
-    /* VALUES SECTION */
-    .values-section {
-        background: #111;
-        color: white;
-        padding: 100px 0;
-        text-align: center;
-        margin-bottom: 120px;
+    .about-content h2 {
+        font-size: 36px;
+        font-weight: 800;
+        margin-bottom: 30px;
+        letter-spacing: -1px;
+        color: #111;
     }
+
+    .about-content p {
+        font-size: 17px;
+        color: #555;
+        line-height: 1.8;
+        margin-bottom: 25px;
+    }
+
+    .about-image-wrapper {
+        position: relative;
+        overflow: hidden;
+        border-radius: 8px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    }
+
+    .about-image {
+        width: 100%;
+        height: 600px;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.7s ease;
+    }
+    
+    .about-image-wrapper:hover .about-image {
+        transform: scale(1.05);
+    }
+
+    /* --- VALUES SECTION --- */
+    .values-section {
+        background: #0f0f0f;
+        color: white;
+        padding: 140px 0;
+        text-align: center;
+    }
+
+    .values-header {
+        margin-bottom: 80px;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
     .values-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 40px;
+        gap: 60px;
         max-width: 1200px;
-        margin: 60px auto 0;
-        padding: 0 40px;
+        margin: 0 auto;
+        padding: 0 20px;
     }
+
+    .value-card {
+        padding: 40px 30px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        transition: transform 0.4s ease, background 0.4s ease;
+    }
+
+    .value-card:hover {
+        transform: translateY(-10px);
+        background: rgba(255,255,255,0.08);
+    }
+
+    .value-icon {
+        font-size: 36px;
+        margin-bottom: 25px;
+        color: #fff; /* Gold accent can be applied here if defined in root */
+    }
+
     .value-card h3 {
-        font-size: 20px;
-        font-weight: 600;
+        font-size: 22px;
+        font-weight: 700;
         margin-bottom: 15px;
+        letter-spacing: 0.5px;
     }
+
     .value-card p {
-        font-size: 14px;
-        color: #aaa;
+        font-size: 15px;
+        color: #888;
         line-height: 1.6;
     }
-    .value-icon {
-        font-size: 30px;
-        margin-bottom: 20px;
-        color: white;
+
+    /* --- INTERACTIVE MAP SECTION --- */
+    .location-section {
+        position: relative;
+        padding: 0; /* Full bleed capability */
+        margin-top: 0;
     }
 
-    /* LOCATION SECTION */
-    .location-wrapper {
-        text-align: center;
-        margin-bottom: 120px;
+    .map-container {
+        position: relative;
+        width: 100%;
+        height: 650px; /* Requested Bigger Map */
+        overflow: hidden;
     }
-    /* UPDATED: Map Styling */
+
     .map-frame {
         width: 100%;
-        height: 450px;
+        height: 100%;
         border: 0;
-        border-radius: 8px;
-        margin-top: 40px;
-        filter: grayscale(100%); /* Premium monochrome look */
-        transition: filter 0.3s;
-    }
-    .map-frame:hover {
-        filter: grayscale(0%); /* Color on hover */
+        filter: grayscale(100%) contrast(1.1); /* Premium Noir Look */
+        transition: filter 0.5s ease;
     }
 
-    @media (max-width: 900px) {
-        .about-grid { grid-template-columns: 1fr; gap: 40px; }
-        .about-image { height: 350px; }
+    .map-container:hover .map-frame {
+        filter: grayscale(0%) contrast(1); /* Reveal color on interaction */
+    }
+
+    /* Floating Info Card */
+    .location-card {
+        position: absolute;
+        top: 50%;
+        left: 10%;
+        transform: translateY(-50%);
+        background: white;
+        padding: 50px;
+        max-width: 400px;
+        box-shadow: 0 30px 60px rgba(0,0,0,0.15);
+        border-radius: 4px;
+        z-index: 5;
+    }
+
+    .location-card h2 {
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 10px;
+        color: #111;
+    }
+
+    .location-card .meta {
+        margin-top: 30px;
+        font-size: 15px;
+        color: #444;
+        line-height: 1.8;
+    }
+
+    .location-card .status {
+        display: inline-block;
+        margin-top: 20px;
+        padding: 5px 12px;
+        background: #e6fcf5;
+        color: #0ca678;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        border-radius: 50px;
+    }
+
+    /* Responsive Adjustments */
+    @media (max-width: 1024px) {
+        .about-grid { grid-template-columns: 1fr; gap: 60px; }
+        .about-image { height: 400px; }
+        .location-card { position: relative; top: auto; left: auto; transform: none; max-width: 100%; margin: -60px 20px 60px 20px; text-align: center; }
+        .map-container { height: 500px; }
+    }
+    
+    @media (max-width: 768px) {
         .values-grid { grid-template-columns: 1fr; }
-        .about-hero h1 { font-size: 40px; }
+        .section-pad { padding: 80px 0; }
+        .about-hero { height: 60vh; }
     }
 </style>
 
-<div class="about-hero">
+<header class="about-hero">
+    <div class="about-hero-bg"></div>
+    <div class="hero-content">
+        <h1>Modern. Ethical.<br>Timeless.</h1>
+        <p>Founded in 2024, Shop.co is defining the new standard for luxury essentials. We bridge the gap between high-end craftsmanship and everyday wearability.</p>
+    </div>
+</header>
+
+<section class="section-pad container">
+    <div class="about-grid reveal-on-scroll">
+        <div class="about-content">
+            <h2>The Philosophy</h2>
+            <p>In a world of fast fashion and fleeting trends, we chose to stand still. Shop.co was born from a desire to create a wardrobe that transcends seasons. We believe that true luxury isn't about the logo on the chest, but the feeling of the fabric against your skin.</p>
+            <p>Our design philosophy is rooted in "subtracting the unnecessary." By removing superfluous details, we focus purely on cut, material, and longevity. Every stitch has a purpose.</p>
+        </div>
+        <div class="about-image-wrapper">
+            <img src="https://images.unsplash.com/photo-1600607686527-6fb886090705?q=80&w=2000&auto=format&fit=crop" alt="Philosophy" class="about-image">
+        </div>
+    </div>
+</section>
+
+<section class="section-pad container">
+    <div class="about-grid reveal-on-scroll">
+        <div class="about-image-wrapper" style="order: 1;"> <img src="https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=2000&auto=format&fit=crop" alt="Our Studio" class="about-image">
+        </div>
+        <div class="about-content" style="order: 2;">
+            <h2>Ethical Craftsmanship</h2>
+            <p>We partner exclusively with family-owned factories in Italy, Portugal, and Japan. These artisans have honed their craft over generations, ensuring that every garment meets our rigorous standards.</p>
+            <p>Transparency is non-negotiable. We pay 3x the average wage to our makers and ensure zero-waste production cycles. When you wear Shop.co, you wear our values.</p>
+        </div>
+    </div>
+</section>
+
+<section class="values-section">
     <div class="container">
-        <h1>Redefining Modern Essentials.</h1>
-        <p>Founded in 2024, Shop.co is dedicated to the art of timeless style, ethical sourcing, and premium quality.</p>
-    </div>
-</div>
-
-<div class="container">
-    <div class="about-grid">
-        <div class="about-content">
-            <h2>Our Story</h2>
-            <p>It started with a simple idea: clothing shouldn't just look good, it should feel good and last longer. What began as a small studio in downtown Singapore has grown into a global destination for those who appreciate the finer details.</p>
-            <p>We believe in "slow fashion"—the concept that buying less but buying better is the future. Every piece in our collection is meticulously crafted to stand the test of time, both in durability and style.</p>
+        <div class="values-header reveal-on-scroll">
+            <h2 style="font-size: 36px; font-weight: 800; margin-bottom: 15px;">Core Principles</h2>
+            <p style="color: #888;">The pillars that define every decision we make.</p>
         </div>
-        <img src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" alt="Our Studio" class="about-image">
-    </div>
-
-    <div class="about-grid">
-        <img src="https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" alt="Our Process" class="about-image" style="order: -1;">
-        <div class="about-content">
-            <h2>Our Mission</h2>
-            <p>We are on a mission to democratize luxury quality. By cutting out the middlemen and working directly with the world's finest manufacturers, we bring you designer-grade materials at a fraction of the traditional cost.</p>
-            <p>Transparency is at our core. From the thread count to the factory conditions, we ensure every step of our supply chain meets rigorous ethical standards.</p>
-        </div>
-    </div>
-</div>
-
-<div class="values-section">
-    <h2 style="font-size: 36px; font-weight: 700;">Our Core Values</h2>
-    <div class="values-grid">
-        <div class="value-card">
-            <i class="fa-regular fa-gem value-icon"></i>
-            <h3>Quality First</h3>
-            <p>We never compromise on materials. If it's not the best, it doesn't make the cut.</p>
-        </div>
-        <div class="value-card">
-            <i class="fa-solid fa-leaf value-icon"></i>
-            <h3>Sustainability</h3>
-            <p>We use 100% organic cotton and recycled packaging to minimize our footprint.</p>
-        </div>
-        <div class="value-card">
-            <i class="fa-solid fa-users value-icon"></i>
-            <h3>Customer Focus</h3>
-            <p>Our customers are our community. We build products based on your feedback.</p>
-        </div>
-    </div>
-</div>
-
-<div class="container">
-    <div class="location-wrapper">
-        <h2>Visit Our Flagship</h2>
-        <p style="color: #666; margin-top: 10px;">Experience our collection in person.</p>
         
-        <div style="margin-top: 30px; font-size: 14px; line-height: 1.6;">
-            <strong>Shop.co HQ</strong><br>
-            88 Orchard Road, #05-12<br>
-            Singapore 238888<br>
-            <br>
-            <em>Open Daily: 10am - 9pm</em>
+        <div class="values-grid">
+            <div class="value-card reveal-on-scroll">
+                <i class="fa-regular fa-gem value-icon"></i>
+                <h3>Uncompromising Quality</h3>
+                <p>Sourced from the world's finest mills. If the fabric isn't perfect, we don't use it.</p>
+            </div>
+            <div class="value-card reveal-on-scroll">
+                <i class="fa-solid fa-earth-americas value-icon"></i>
+                <h3>Radical Sustainability</h3>
+                <p>100% plastic-free packaging and carbon-neutral shipping on every order.</p>
+            </div>
+            <div class="value-card reveal-on-scroll">
+                <i class="fa-solid fa-users-viewfinder value-icon"></i>
+                <h3>Community Driven</h3>
+                <p>We build in public. Our roadmap is defined by customer feedback, not trend forecasts.</p>
+            </div>
         </div>
+    </div>
+</section>
 
+<section class="location-section reveal-on-scroll">
+    <div class="map-container">
         <iframe 
-            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3988.787723223077!2d103.83526631475715!3d1.301392999050722!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31da19936531473d%3A0x9460595353592f6f!2sOrchard%20Rd%2C%20Singapore!5e0!3m2!1sen!2ssg!4v1645600000000!5m2!1sen!2ssg" 
+            src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3988.7906105436665!2d103.8329!3d1.3048!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31da1990f3f80001%3A0x1!2sOrchard%20Road%2C%20Singapore!5e0!3m2!1sen!2sus!4v1620000000000!5m2!1sen!2sus" 
             class="map-frame" 
             allowfullscreen="" 
             loading="lazy" 
             referrerpolicy="no-referrer-when-downgrade">
         </iframe>
+
+        <div class="location-card">
+            <h2>Visit The Flagship</h2>
+            <p style="color: #666;">Experience the collection in person. Book a private styling session or walk in.</p>
+            
+            <div class="meta">
+                <strong>Shop.co HQ</strong><br>
+                88 Orchard Road, #05-12<br>
+                Singapore 238888<br><br>
+                Mon - Sun: 10:00 AM - 9:00 PM
+            </div>
+            
+            <span class="status">Open Now</span>
+        </div>
     </div>
-</div>
+</section>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const observerOptions = {
+            threshold: 0.15, // Trigger when 15% of element is visible
+            rootMargin: "0px 0px -50px 0px"
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add("is-visible");
+                    observer.unobserve(entry.target); // Only animate once
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal-on-scroll').forEach(el => {
+            observer.observe(el);
+        });
+    });
+</script>
 
 {% endblock %}

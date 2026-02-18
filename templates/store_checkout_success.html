@@ -1,31 +1,264 @@
 {% extends "store_base.html" %}
+
+{% block title %}Order Confirmed | Shop.co{% endblock %}
+
 {% block content %}
 <style>
-    .success-container { max-width: 600px; margin: 80px auto; text-align: center; padding: 0 20px; }
-    .success-icon { font-size: 60px; color: #166534; margin-bottom: 20px; }
-    .success-title { font-size: 32px; font-weight: 800; margin-bottom: 15px; }
-    .success-text { color: #666; font-size: 16px; margin-bottom: 30px; line-height: 1.5; }
-    .order-pill { background: #f3f4f6; padding: 5px 15px; border-radius: 20px; font-weight: 600; font-size: 14px; display: inline-block; margin-bottom: 40px; }
-    
-    .btn-review { display: inline-block; background: black; color: white; padding: 15px 40px; border-radius: 6px; text-decoration: none; font-weight: 700; text-transform: uppercase; transition: 0.2s; }
-    .btn-review:hover { opacity: 0.9; transform: translateY(-2px); }
+    /* --- PAGE LAYOUT --- */
+    .success-page-wrapper {
+        background-color: #f8f9fa;
+        min-height: 80vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 60px 20px;
+    }
+
+    .success-card {
+        background: white;
+        max-width: 650px;
+        width: 100%;
+        padding: 60px;
+        border-radius: 2px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.03);
+        text-align: center;
+        border: 1px solid #eaeaea;
+    }
+
+    /* --- SUCCESS HEADER --- */
+    .icon-wrapper {
+        margin-bottom: 30px;
+        animation: scaleIn 0.6s ease-out;
+    }
+    .fa-circle-check {
+        font-size: 64px;
+        color: #111;
+    }
+
+    h1 {
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -1px;
+        margin-bottom: 15px;
+        color: #111;
+        text-transform: uppercase;
+    }
+
+    .order-sub {
+        color: #666;
+        font-size: 15px;
+        line-height: 1.6;
+        margin-bottom: 40px;
+    }
+
+    .order-badge {
+        display: inline-block;
+        background: #f3f3f3;
+        color: #333;
+        font-family: monospace;
+        font-size: 14px;
+        padding: 8px 16px;
+        border-radius: 4px;
+        margin-top: 10px;
+        letter-spacing: 1px;
+    }
+
+    /* --- REVIEW FORM SECTION --- */
+    .review-section {
+        margin-top: 50px;
+        padding-top: 40px;
+        border-top: 1px solid #eaeaea;
+        text-align: left;
+    }
+
+    .review-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .review-header h3 {
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        letter-spacing: 0.5px;
+    }
+    .review-header p {
+        font-size: 13px;
+        color: #888;
+    }
+
+    /* --- FORM ELEMENTS --- */
+    .form-group {
+        margin-bottom: 25px;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #999;
+        margin-bottom: 8px;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 14px;
+        border: 1px solid #e5e5e5;
+        border-radius: 0;
+        font-size: 14px;
+        transition: border-color 0.3s;
+        background: #fafafa;
+        font-family: inherit;
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: #111;
+        background: white;
+    }
+
+    select.form-control {
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23111%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat;
+        background-position: right 15px center;
+        background-size: 10px;
+    }
+
+    /* --- STAR RATING --- */
+    .rating-wrapper {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: flex-start;
+        gap: 10px;
+    }
+    .rating-wrapper input { display: none; }
+    .rating-wrapper label { cursor: pointer; font-size: 24px; color: #e5e5e5; transition: color 0.2s; }
+    .rating-wrapper label:before { content: '\f005'; font-family: "Font Awesome 6 Free"; font-weight: 900; }
+    .rating-wrapper input:checked ~ label,
+    .rating-wrapper label:hover,
+    .rating-wrapper label:hover ~ label { color: #111; }
+
+    /* --- BUTTONS --- */
+    .btn-submit {
+        width: 100%;
+        background: #111;
+        color: white;
+        padding: 16px;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        border: none;
+        cursor: pointer;
+        letter-spacing: 1px;
+        transition: opacity 0.3s;
+    }
+    .btn-submit:hover { opacity: 0.8; }
+
+    .btn-secondary-link {
+        display: block;
+        margin-top: 20px;
+        color: #888;
+        font-size: 13px;
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        width: fit-content;
+        margin-left: auto;
+        margin-right: auto;
+        transition: border 0.3s;
+    }
+    .btn-secondary-link:hover {
+        border-color: #888;
+        color: #111;
+    }
+
+    @keyframes scaleIn {
+        from { transform: scale(0.8); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+    }
+
+    @media (max-width: 600px) {
+        .success-card { padding: 30px 20px; }
+        .success-page-wrapper { padding: 20px; }
+        h1 { font-size: 26px; }
+    }
 </style>
 
-<div class="success-container">
-    <div class="success-icon"><i class="fa-solid fa-circle-check"></i></div>
-    <div class="success-title">Payment Successful!</div>
-    <div class="success-text">Thank you for your purchase. Your order is being processed and will be shipped soon.</div>
-    
-    <div class="order-pill">Order #{{ order_code }}</div>
-    
-    <div>
-        <a href="{{ url_for('store_review', order_code=order_code) }}" class="btn-review">
-            Leave a Review <i class="fa-solid fa-arrow-right" style="margin-left: 10px;"></i>
-        </a>
-    </div>
-    
-    <div style="margin-top: 20px;">
-        <a href="{{ url_for('store_home') }}" style="color: #666; font-size: 14px; text-decoration: underline;">Return to Home</a>
+<div class="success-page-wrapper">
+    <div class="success-card">
+        
+        <div class="icon-wrapper">
+            <i class="fa-regular fa-circle-check"></i>
+        </div>
+        <h1>Order Confirmed</h1>
+        <div class="order-sub">
+            Thank you, {{ g.user.first_name }}! We've received your order. <br>
+            A confirmation email has been sent to {{ g.user.email }}.
+            <br>
+            <span class="order-badge">Ref: {{ order_code }}</span>
+        </div>
+
+        <div style="display: flex; gap: 15px; justify-content: center; margin-bottom: 20px;">
+            {% if order.invoice %}
+            <a href="{{ url_for('view_invoice', invoice_id=order.invoice.id) }}" target="_blank" class="btn-secondary-link" style="margin: 0; color: #111; border-bottom: 1px solid #ddd;">
+                View Invoice
+            </a>
+            {% endif %}
+            
+            <a href="{{ url_for('store_shop') }}" class="btn-secondary-link" style="margin: 0; color: #111; border-bottom: 1px solid #ddd;">
+                Continue Shopping
+            </a>
+        </div>
+
+        {% if reviewable_items %}
+        <div class="review-section">
+            <div class="review-header">
+                <h3>Share Your Experience</h3>
+                <p>Tell us about your new purchase.</p>
+            </div>
+
+            <form action="{{ url_for('submit_checkout_review') }}" method="POST">
+                <input type="hidden" name="order_code" value="{{ order_code }}">
+
+                <div class="form-group">
+                    <label class="form-label">Select Item</label>
+                    <select name="product_id" required class="form-control">
+                        {% if reviewable_items|length > 1 %}
+                            <option value="" disabled selected>Select a product...</option>
+                        {% endif %}
+                        {% for item in reviewable_items %}
+                            <option value="{{ item.product_id }}">{{ item.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Rating</label>
+                    <div class="rating-wrapper">
+                        <input type="radio" id="star5" name="rating" value="5" required><label for="star5" title="5 stars"></label>
+                        <input type="radio" id="star4" name="rating" value="4"><label for="star4" title="4 stars"></label>
+                        <input type="radio" id="star3" name="rating" value="3"><label for="star3" title="3 stars"></label>
+                        <input type="radio" id="star2" name="rating" value="2"><label for="star2" title="2 stars"></label>
+                        <input type="radio" id="star1" name="rating" value="1"><label for="star1" title="1 star"></label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Headline</label>
+                    <input type="text" name="title" class="form-control" placeholder="What's most important to know?">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Review</label>
+                    <textarea name="comment" rows="4" class="form-control" placeholder="How was the fit and quality?"></textarea>
+                </div>
+
+                <button type="submit" class="btn-submit">Submit Review</button>
+            </form>
+        </div>
+        {% endif %}
+
     </div>
 </div>
 {% endblock %}
