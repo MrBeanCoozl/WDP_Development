@@ -242,7 +242,17 @@
             <table class="mini-table">
                 {% for prod in top_products %}
                 <tr>
-                    <td style="width: 50px;"><img src="{{ prod.image_url }}" alt="img"></td>
+                    <td style="width: 50px;">
+                        {% set first_raw = prod.image_url.split('|')[0].strip() if prod.image_url else 'default.jpg' %}
+                        {% if first_raw.startswith('http') %}
+                            {% set img_src = first_raw %}
+                        {% elif 'default' in first_raw %}
+                            {% set img_src = url_for('static', filename='images/default.jpg') %}
+                        {% else %}
+                            {% set img_src = url_for('static', filename='product_images/' + first_raw) %}
+                        {% endif %}
+                        <img src="{{ img_src }}" alt="{{ prod.name }}">
+                    </td>
                     <td>
                         <div style="font-weight: 600; color: #334155;">{{ prod.name }}</div>
                         <div style="font-size: 12px; color: #94a3b8;">{{ prod.category }}</div>
