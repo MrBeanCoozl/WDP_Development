@@ -148,6 +148,43 @@
             <div style="height: 300px;">
                 <canvas id="revenueChart"></canvas>
             </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <button id="toggleChartBtn" onclick="toggleChartType()" style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; color: #475569; transition: 0.2s;">
+                    <i class="fa-solid fa-chart-line" style="margin-right: 4px;"></i> Switch to Line Graph
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Average Order Value (AOV) Trend</div>
+            </div>
+            <div style="height: 250px;">
+                <canvas id="aovChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">New vs. Returning Customers (Revenue)</div>
+            </div>
+            <div style="height: 250px;">
+                <canvas id="customerTypeChart"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title" id="inventoryChartTitle">Low Stock Warning (Top Sellers)</div>
+            </div>
+            <div style="height: 300px;">
+                <canvas id="inventoryChart"></canvas>
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <button id="toggleInventoryBtn" onclick="toggleInventoryChart()" style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; color: #475569; transition: 0.2s;">
+                    <i class="fa-solid fa-triangle-exclamation" style="margin-right: 4px;"></i> View Low Stock (Worst Sellers)
+                </button>
+            </div>
         </div>
 
         <div class="card">
@@ -189,6 +226,18 @@
         </div>
 
         <div class="card">
+            <div class="card-header"><div class="card-title" id="statusChartTitle">Invoice Status</div></div>
+            <div style="height: 220px;">
+                <canvas id="statusChart"></canvas>
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <button id="toggleStatusBtn" onclick="toggleStatusChart()" style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; color: #475569; transition: 0.2s;">
+                    <i class="fa-solid fa-box" style="margin-right: 4px;"></i> View Fulfillment Status
+                </button>
+            </div>
+        </div>
+
+        <div class="card">
             <div class="card-header"><div class="card-title">Top Selling Items</div></div>
             <table class="mini-table">
                 {% for prod in top_products %}
@@ -223,6 +272,12 @@
             <p style="font-size: 13px; color: #64748b; margin-bottom: 20px;">
                 Set your revenue goals for each month. This will update the "Revenue Performance" chart immediately.
             </p>
+
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; gap: 10px; align-items: center;">
+                <label style="font-size: 13px; font-weight: 700; color: #475569;">Bulk Set Targets:</label>
+                <input type="number" id="bulkTarget" placeholder="Amount (e.g. 20000)" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; width: 160px;">
+                <button type="button" onclick="applyBulkTarget()" style="background: #10b981; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s;">Apply to All</button>
+            </div>
             
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; max-height: 300px; overflow-y: auto;">
                 {% set months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] %}
@@ -249,16 +304,24 @@
     function openModal() { document.getElementById('targetModal').style.display = 'flex'; }
     function closeModal() { document.getElementById('targetModal').style.display = 'none'; }
     
-    // Close if clicked outside
     window.onclick = function(e) {
         let modal = document.getElementById('targetModal');
         if (e.target == modal) closeModal();
     }
 
-    // --- CHART CONFIG ---
-    // 1. Revenue Chart
+    function applyBulkTarget() {
+        let val = document.getElementById('bulkTarget').value;
+        if (val === '') return; 
+        
+        let targetInputs = document.querySelectorAll('input[name^="target_"]');
+        targetInputs.forEach(input => {
+            input.value = val;
+        });
+    }
+
+    // --- CHART 1: REVENUE ---
     const ctxRev = document.getElementById('revenueChart').getContext('2d');
-    new Chart(ctxRev, {
+    let revenueChartInstance = new Chart(ctxRev, {
         type: 'bar',
         data: {
             labels: {{ chart_invoice_months | tojson }},
@@ -267,13 +330,16 @@
                     label: 'Actual Revenue',
                     data: {{ chart_invoice_reality | tojson }},
                     backgroundColor: '#3b82f6',
+                    borderColor: '#3b82f6',
                     borderRadius: 4,
-                    barPercentage: 0.6
+                    barPercentage: 0.6,
+                    tension: 0.3, 
+                    fill: true
                 },
                 {
                     label: 'Target',
                     data: {{ chart_invoice_target | tojson }},
-                    type: 'line',
+                    type: 'line', 
                     borderColor: '#94a3b8',
                     borderWidth: 2,
                     borderDash: [5, 5],
@@ -297,7 +363,152 @@
         }
     });
 
-    // 2. Category Chart
+    function toggleChartType() {
+        const btn = document.getElementById('toggleChartBtn');
+        
+        if (revenueChartInstance.config.type === 'bar') {
+            revenueChartInstance.config.type = 'line';
+            revenueChartInstance.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.15)';
+            revenueChartInstance.data.datasets[0].borderWidth = 3;
+            btn.innerHTML = '<i class="fa-solid fa-chart-simple" style="margin-right: 4px;"></i> Switch to Bar Graph';
+        } else {
+            revenueChartInstance.config.type = 'bar';
+            revenueChartInstance.data.datasets[0].backgroundColor = '#3b82f6';
+            revenueChartInstance.data.datasets[0].borderWidth = 0;
+            btn.innerHTML = '<i class="fa-solid fa-chart-line" style="margin-right: 4px;"></i> Switch to Line Graph';
+        }
+        revenueChartInstance.update();
+    }
+
+    // --- CHART 2: AOV TREND ---
+    const ctxAov = document.getElementById('aovChart').getContext('2d');
+    new Chart(ctxAov, {
+        type: 'line',
+        data: {
+            labels: {{ chart_invoice_months | tojson }},
+            datasets: [{
+                label: 'Avg. Order Value ($)',
+                data: {{ chart_aov_trend | tojson }},
+                borderColor: '#8b5cf6', 
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                borderWidth: 3,
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#8b5cf6',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }, 
+            scales: { 
+                y: { 
+                    beginAtZero: true, 
+                    grid: { borderDash: [2, 4], color: '#f1f5f9' },
+                    ticks: { callback: function(value) { return '$' + value; } } 
+                }, 
+                x: { grid: { display: false } } 
+            }
+        }
+    });
+
+    // --- CHART 3: NEW VS RETURNING CUSTOMERS ---
+    const ctxCustomer = document.getElementById('customerTypeChart').getContext('2d');
+    new Chart(ctxCustomer, {
+        type: 'bar',
+        data: {
+            labels: ['New Customers (1 Order)', 'Returning Customers (2+ Orders)'],
+            datasets: [{
+                label: 'Total Revenue ($)',
+                data: [{{ new_customer_rev }}, {{ returning_customer_rev }}],
+                backgroundColor: ['#3b82f6', '#10b981'],
+                borderRadius: 6,
+                barPercentage: 0.5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }, 
+            scales: { 
+                y: { 
+                    beginAtZero: true, 
+                    grid: { borderDash: [2, 4], color: '#f1f5f9' },
+                    ticks: { callback: function(value) { return '$' + value; } } 
+                }, 
+                x: { grid: { display: false } } 
+            }
+        }
+    });
+
+    // --- CHART 4: INVENTORY HEALTH (NEW) ---
+    const ctxInv = document.getElementById('inventoryChart').getContext('2d');
+    
+    // Arrays fetched from Python
+    const stockTopLabels = {{ stock_top_labels | tojson }};
+    const stockTopData = {{ stock_top_data | tojson }};
+    const stockWorstLabels = {{ stock_worst_labels | tojson }};
+    const stockWorstData = {{ stock_worst_data | tojson }};
+    
+    let inventoryChartInstance = new Chart(ctxInv, {
+        type: 'bar',
+        data: {
+            labels: stockTopLabels,
+            datasets: [{
+                label: 'Stock Remaining',
+                data: stockTopData,
+                backgroundColor: '#f59e0b', // Orange indicating warning
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y', // Makes it horizontal
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }, 
+            scales: { 
+                x: { 
+                    beginAtZero: true, 
+                    grid: { borderDash: [2, 4], color: '#f1f5f9' }
+                }, 
+                y: { grid: { display: false } } 
+            }
+        }
+    });
+
+    let currentInvView = 'top';
+
+    function toggleInventoryChart() {
+        const btn = document.getElementById('toggleInventoryBtn');
+        const title = document.getElementById('inventoryChartTitle');
+        
+        if (currentInvView === 'top') {
+            // Switch to Worst Sellers view
+            currentInvView = 'worst';
+            title.innerText = 'Low Stock Warning (Worst Sellers)';
+            btn.innerHTML = '<i class="fa-solid fa-fire" style="margin-right: 4px;"></i> View Low Stock (Top Sellers)';
+            
+            inventoryChartInstance.data.labels = stockWorstLabels;
+            inventoryChartInstance.data.datasets[0].data = stockWorstData;
+            inventoryChartInstance.data.datasets[0].backgroundColor = '#ef4444'; // Red for items you might not want to restock
+        } else {
+            // Switch back to Top Sellers view
+            currentInvView = 'top';
+            title.innerText = 'Low Stock Warning (Top Sellers)';
+            btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="margin-right: 4px;"></i> View Low Stock (Worst Sellers)';
+            
+            inventoryChartInstance.data.labels = stockTopLabels;
+            inventoryChartInstance.data.datasets[0].data = stockTopData;
+            inventoryChartInstance.data.datasets[0].backgroundColor = '#f59e0b'; // Back to Orange
+        }
+        
+        inventoryChartInstance.update();
+    }
+
+    // --- CHART 5: CATEGORY ---
     const ctxCat = document.getElementById('categoryChart').getContext('2d');
     new Chart(ctxCat, {
         type: 'doughnut',
@@ -316,5 +527,56 @@
             cutout: '75%'
         }
     });
+
+    // --- CHART 6: STATUS (INVOICE / FULFILLMENT) ---
+    const ctxStatus = document.getElementById('statusChart').getContext('2d');
+    
+    const invoiceData = [{{ paid_invoices }}, {{ unpaid_invoices }}];
+    const fulfillmentData = [{{ shipped_orders }}, {{ unshipped_orders }}];
+    
+    let statusChartInstance = new Chart(ctxStatus, {
+        type: 'doughnut',
+        data: {
+            labels: ['Paid', 'Unpaid / Pending'],
+            datasets: [{
+                data: invoiceData,
+                backgroundColor: ['#10b981', '#f59e0b'], 
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
+            cutout: '70%'
+        }
+    });
+
+    let currentStatusView = 'invoice'; 
+    
+    function toggleStatusChart() {
+        const btn = document.getElementById('toggleStatusBtn');
+        const title = document.getElementById('statusChartTitle');
+        
+        if (currentStatusView === 'invoice') {
+            currentStatusView = 'fulfillment';
+            title.innerText = 'Fulfillment Status';
+            btn.innerHTML = '<i class="fa-solid fa-file-invoice-dollar" style="margin-right: 4px;"></i> View Invoice Status';
+            
+            statusChartInstance.data.labels = ['Shipped', 'Unshipped / Pending'];
+            statusChartInstance.data.datasets[0].data = fulfillmentData;
+            statusChartInstance.data.datasets[0].backgroundColor = ['#3b82f6', '#ef4444']; 
+        } else {
+            currentStatusView = 'invoice';
+            title.innerText = 'Invoice Status';
+            btn.innerHTML = '<i class="fa-solid fa-box" style="margin-right: 4px;"></i> View Fulfillment Status';
+            
+            statusChartInstance.data.labels = ['Paid', 'Unpaid / Pending'];
+            statusChartInstance.data.datasets[0].data = invoiceData;
+            statusChartInstance.data.datasets[0].backgroundColor = ['#10b981', '#f59e0b']; 
+        }
+        
+        statusChartInstance.update();
+    }
 </script>
 {% endblock %}

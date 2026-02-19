@@ -2434,25 +2434,68 @@ def dashboard():
     aov = (total_revenue / paid_invoice_count) if paid_invoice_count > 0 else 0
 
     # --- KPI 5: CUSTOMER SATISFACTION (CSAT) ---
-    # Average of Review.rating (1-5 stars)
     avg_rating = db.session.query(func.avg(Review.rating)).scalar() or 0
     csat_score = round(avg_rating, 1)
 
     # --- KPI 6: CANCELLATION RATE ---
-    # Percentage of orders marked as 'Cancelled'
     cancelled_count = Order.query.filter_by(status='Cancelled').count()
     cancel_rate = 0
     if total_orders > 0:
         cancel_rate = (cancelled_count / total_orders) * 100
 
-    # --- CHART DATA ---
+    # --- STATUS TRACKING (DONUT CHART) ---
+    shipped_orders = Order.query.filter_by(status='Shipped').count()
+    unshipped_orders = total_orders - shipped_orders
+
+    paid_invoices = Invoice.query.filter_by(status='Paid').count()
+    unpaid_invoices = Invoice.query.filter(Invoice.status != 'Paid').count()
+
+    # --- NEW VS RETURNING CUSTOMERS ---
+    client_stats = db.session.query(
+        Invoice.client_id, 
+        func.count(Invoice.id).label('inv_count'),
+        func.sum(Invoice.amount).label('total_spent')
+    ).filter(Invoice.status == 'Paid').group_by(Invoice.client_id).all()
+
+    new_customer_rev = 0
+    returning_customer_rev = 0
+
+    for stat in client_stats:
+        if stat.inv_count == 1:
+            new_customer_rev += stat.total_spent
+        elif stat.inv_count > 1:
+            returning_customer_rev += stat.total_spent
+
+    # --- NEW: INVENTORY HEALTH (LOW STOCK WARNING) ---
+    # Top Sellers running low (Order by lowest stock first, then highest sales)
+    low_stock_top = Product.query.order_by(Product.stock.asc(), Product.sales_count.desc()).limit(10).all()
+    # Worst Sellers running low (Order by lowest stock first, then lowest sales)
+    low_stock_worst = Product.query.order_by(Product.stock.asc(), Product.sales_count.asc()).limit(10).all()
+
+    stock_top_labels = [p.name for p in low_stock_top]
+    stock_top_data = [p.stock for p in low_stock_top]
+    
+    stock_worst_labels = [p.name for p in low_stock_worst]
+    stock_worst_data = [p.stock for p in low_stock_worst]
+
+    # --- CHART DATA: REVENUE & AOV ---
     monthly_data = db.session.query(
-        extract('month', Invoice.date_created).label('month'), func.sum(Invoice.amount).label('total')
-    ).filter(Invoice.status == 'Paid', extract('year', Invoice.date_created) == curr_year).group_by('month').all()
+        func.strftime('%m', Invoice.date_created).label('month'), 
+        func.sum(Invoice.amount).label('total'),
+        func.avg(Invoice.amount).label('aov')
+    ).filter(
+        Invoice.status == 'Paid', 
+        func.strftime('%Y', Invoice.date_created) == str(curr_year)
+    ).group_by('month').all()
 
     chart_invoice_reality = [0] * 12
+    chart_aov_trend = [0] * 12 
+
     for item in monthly_data:
-        chart_invoice_reality[int(item.month) - 1] = item.total
+        if item.month: 
+            month_idx = int(item.month) - 1
+            chart_invoice_reality[month_idx] = item.total
+            chart_aov_trend[month_idx] = round(item.aov, 2)
 
     chart_invoice_target = get_sales_targets()
 
@@ -2470,11 +2513,22 @@ def dashboard():
         total_orders=total_orders, order_growth=order_growth,
         total_customers=total_customers,
         aov=format_k(aov),
-        csat_score=csat_score,   # <--- NEW
-        cancel_rate=cancel_rate, # <--- NEW
+        csat_score=csat_score,
+        cancel_rate=cancel_rate,
+        
+        shipped_orders=shipped_orders, unshipped_orders=unshipped_orders,
+        paid_invoices=paid_invoices, unpaid_invoices=unpaid_invoices,
+        
+        new_customer_rev=new_customer_rev, returning_customer_rev=returning_customer_rev,
+        
+        # New variables passed for Inventory
+        stock_top_labels=stock_top_labels, stock_top_data=stock_top_data,
+        stock_worst_labels=stock_worst_labels, stock_worst_data=stock_worst_data,
         
         chart_invoice_months=['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
         chart_invoice_reality=chart_invoice_reality, chart_invoice_target=chart_invoice_target,
+        chart_aov_trend=chart_aov_trend, 
+        
         chart_cat_labels=chart_cat_labels, chart_cat_data=chart_cat_data,
         top_products=top_products, recent_orders=recent_orders
     )
