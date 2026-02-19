@@ -8,10 +8,15 @@
     .section-header { font-size: 18px; font-weight: 700; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
     
     .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-    .form-group { margin-bottom: 20px; }
+    .form-group { margin-bottom: 20px; position: relative; }
     .form-label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; color: #444; }
-    .form-input { width: 100%; padding: 14px; border: 1px solid #e5e5e5; border-radius: 6px; box-sizing: border-box; font-size: 14px; transition: 0.2s; }
+    
+    .form-input { width: 100%; padding: 14px; border: 1px solid #e5e5e5; border-radius: 6px; box-sizing: border-box; font-size: 14px; transition: 0.2s; font-family: inherit; }
     .form-input:focus { border-color: black; outline: none; }
+    
+    /* Error states */
+    .form-input.error { border-color: #ef4444; background-color: #fef2f2; }
+    .error-msg { color: #ef4444; font-size: 11px; margin-top: 5px; font-weight: 600; display: none; }
     
     /* Payment Tabs */
     .payment-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
@@ -33,7 +38,7 @@
     .summary-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 14px; color: #555; }
     .summary-total { display: flex; justify-content: space-between; margin-top: 20px; padding-top: 20px; border-top: 2px solid #eee; font-weight: 800; font-size: 18px; color: black; }
     
-    .btn-pay { width: 100%; background: black; color: white; padding: 18px; border: none; border-radius: 6px; font-size: 14px; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-top: 20px; transition: 0.2s; }
+    .btn-pay { width: 100%; background: black; color: white; padding: 18px; border: none; border-radius: 6px; font-size: 14px; font-weight: 700; text-transform: uppercase; cursor: pointer; margin-top: 20px; transition: 0.2s; box-sizing: border-box; }
     .btn-pay:hover { opacity: 0.9; }
 
     @media (max-width: 900px) { .checkout-container { grid-template-columns: 1fr; } .order-summary { position: static; margin-bottom: 40px; order: -1; } }
@@ -42,27 +47,43 @@
 <div class="checkout-container">
     
     <div class="checkout-form-section">
-        <form method="POST" id="checkoutForm">
+        <form method="POST" id="checkoutForm" novalidate>
             
             <div class="section-header">Shipping Details</div>
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label">First Name</label>
-                    <input type="text" name="first_name" class="form-input" value="{{ user.first_name }}" required>
+                    <input type="text" name="first_name" class="form-input" value="{{ user.first_name }}" required minlength="2">
+                    <div class="error-msg">Required field</div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Last Name</label>
-                    <input type="text" name="last_name" class="form-input" value="{{ user.last_name }}" required>
+                    <input type="text" name="last_name" class="form-input" value="{{ user.last_name }}" required minlength="2">
+                    <div class="error-msg">Required field</div>
                 </div>
             </div>
             
             <div class="form-group">
                 <label class="form-label">Address</label>
-                <input type="text" name="address" class="form-input" placeholder="123 Main St" required>
+                <input type="text" name="address" class="form-input" placeholder="123 Main St" required minlength="5">
+                <div class="error-msg">Required field</div>
             </div>
             <div class="form-grid">
-                <div class="form-group"><label class="form-label">City</label><input type="text" name="city" class="form-input" required></div>
-                <div class="form-group"><label class="form-label">Postal Code</label><input type="text" name="zip" class="form-input" required></div>
+                <div class="form-group">
+                    <label class="form-label">City</label>
+                    <input type="text" name="city" class="form-input" required minlength="2">
+                    <div class="error-msg">Required field</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Postal Code</label>
+                    <input type="text" name="zip" class="form-input" required minlength="4">
+                    <div class="error-msg">Required field</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Remarks / Delivery Instructions (Optional)</label>
+                <textarea name="remarks" class="form-input" rows="2" placeholder="E.g., Leave package at the front desk..."></textarea>
             </div>
 
             <div class="section-header" style="margin-top: 40px;">Payment Method</div>
@@ -109,24 +130,34 @@
                     <div class="form-group">
                         <label class="form-label">Cardholder Name</label>
                         <input type="text" name="card_name" class="form-input" placeholder="Name on Card">
+                        <div class="error-msg" id="nameError">Required field</div>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Card Number</label>
                         <div style="position: relative;">
-                            <input type="text" name="card_number" class="form-input" placeholder="0000 0000 0000 0000" maxlength="19">
+                            <input type="text" id="cardNumber" name="card_number" class="form-input" placeholder="0000 0000 0000 0000" maxlength="19">
                             <i class="fa-regular fa-credit-card" style="position: absolute; right: 14px; top: 16px; color: #999;"></i>
                         </div>
+                        <div class="error-msg" id="cardError">Invalid card number</div>
                     </div>
                     <div class="form-grid">
-                        <div class="form-group"><label class="form-label">Expiry (MM/YY)</label><input type="text" name="expiry" class="form-input" placeholder="MM/YY" maxlength="5"></div>
-                        <div class="form-group"><label class="form-label">CVC</label><input type="text" name="cvc" class="form-input" placeholder="123" maxlength="4"></div>
+                        <div class="form-group">
+                            <label class="form-label">Expiry (MM/YY)</label>
+                            <input type="text" id="expiryDate" name="expiry" class="form-input" placeholder="MM/YY" maxlength="5">
+                            <div class="error-msg" id="expiryError">Invalid date</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">CVC</label>
+                            <input type="text" id="cvcCode" name="cvc" class="form-input" placeholder="123" maxlength="4">
+                            <div class="error-msg" id="cvcError">Invalid CVC</div>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div id="apple-content" class="payment-content" style="text-align: center; padding: 40px; background: #f9f9f9; border-radius: 8px;">
                 <i class="fa-brands fa-apple" style="font-size: 40px; margin-bottom: 10px;"></i>
-                <p>You will be redirected to Apple Pay to complete your purchase secureley.</p>
+                <p>You will be redirected to Apple Pay to complete your purchase securely.</p>
             </div>
             <div id="google-content" class="payment-content" style="text-align: center; padding: 40px; background: #f9f9f9; border-radius: 8px;">
                 <i class="fa-brands fa-google" style="font-size: 40px; margin-bottom: 10px;"></i>
@@ -137,8 +168,10 @@
                 <p>Log in to your PayPal account to finish paying.</p>
             </div>
 
-            <button type="submit" class="btn-pay">Place Order (${{ "%.2f"|format(totals.grand_total) }})</button>
-            <div class="secure-badge"><i class="fa-solid fa-lock"></i> SSL Secured Checkout</div>
+            <button type="submit" class="btn-pay" id="payButton">Place Order (${{ "%.2f"|format(totals.grand_total) }})</button>
+            <div style="text-align: center; margin-top: 15px; font-size: 11px; color: #777;">
+                <i class="fa-solid fa-lock"></i> SSL Secured Checkout
+            </div>
         </form>
     </div>
 
@@ -161,6 +194,7 @@
 </div>
 
 <script>
+    // Payment Tabs toggle
     function selectPayment(type, el) {
         document.querySelectorAll('.p-tab').forEach(t => t.classList.remove('active'));
         el.classList.add('active');
@@ -170,9 +204,129 @@
         document.getElementById(type + '-content').classList.add('active');
     }
     
+    // Toggle New Card form
     function toggleNewCard(show) {
         document.getElementById('newCardForm').style.display = show ? 'block' : 'none';
-        // Logic to disable specific saved ID inputs would go here in prod
     }
+
+    // Input Formatting logic
+    const cardInput = document.getElementById('cardNumber');
+    const expiryInput = document.getElementById('expiryDate');
+    const cvcInput = document.getElementById('cvcCode');
+
+    if (cardInput) {
+        cardInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, ''); 
+            value = value.substring(0, 16); 
+            let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
+            e.target.value = formattedValue;
+        });
+    }
+    if (expiryInput) {
+        expiryInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, ''); 
+            if (value.length >= 2) {
+                value = value.substring(0, 2) + '/' + value.substring(2, 4);
+            }
+            e.target.value = value;
+        });
+    }
+    if (cvcInput) {
+        cvcInput.addEventListener('input', function(e) {
+            e.target.value = e.target.value.replace(/\D/g, ''); 
+        });
+    }
+
+    // Luhn Algorithm Check
+    function luhnCheck(val) {
+        if (/[^0-9-\s]+/.test(val)) return false;
+        let nCheck = 0, bEven = false;
+        val = val.replace(/\D/g, "");
+        if (val.length < 13) return false; 
+        for (let n = val.length - 1; n >= 0; n--) {
+            let cDigit = val.charAt(n), nDigit = parseInt(cDigit, 10);
+            if (bEven && (nDigit *= 2) > 9) nDigit -= 9;
+            nCheck += nDigit;
+            bEven = !bEven;
+        }
+        return (nCheck % 10) == 0;
+    }
+
+    // Expiry Check
+    function validateExpiry(val) {
+        if (!/^\d{2}\/\d{2}$/.test(val)) return false;
+        const parts = val.split('/');
+        const month = parseInt(parts[0], 10);
+        const year = parseInt("20" + parts[1], 10);
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        if (month < 1 || month > 12) return false; 
+        if (year < currentYear) return false; 
+        if (year === currentYear && month < currentMonth) return false; 
+        return true;
+    }
+
+    // Custom Form Validation Override
+    document.getElementById('checkoutForm').addEventListener('submit', function(e) {
+        let isValid = true;
+        
+        // 1. Reset visual errors
+        document.querySelectorAll('.form-input').forEach(i => i.classList.remove('error'));
+        document.querySelectorAll('.error-msg').forEach(m => m.style.display = 'none');
+
+        // 2. HTML5 Standard Validation for Text Inputs
+        const requiredInputs = this.querySelectorAll('input[required]');
+        requiredInputs.forEach(input => {
+            if (!input.value.trim() || input.value.trim().length < parseInt(input.getAttribute('minlength') || 1)) {
+                input.classList.add('error');
+                const errMsg = input.nextElementSibling;
+                if(errMsg && errMsg.classList.contains('error-msg')) errMsg.style.display = 'block';
+                isValid = false;
+            }
+        });
+
+        // 3. Conditional validation for New Card
+        let paymentType = document.getElementById('paymentTypeInput').value;
+        let isNewCard = !document.querySelector('input[name="card_choice"]') || document.querySelector('input[name="card_choice"]:checked').value === 'new';
+
+        if (paymentType === 'card' && isNewCard) {
+            let cardName = document.querySelector('input[name="card_name"]');
+            
+            if (!cardName.value.trim()) {
+                cardName.classList.add('error');
+                document.getElementById('nameError').style.display = 'block';
+                isValid = false;
+            }
+
+            const cardVal = cardInput.value.replace(/\s/g, '');
+            if (!luhnCheck(cardVal)) {
+                cardInput.classList.add('error');
+                document.getElementById('cardError').style.display = 'block';
+                isValid = false;
+            }
+
+            if (!validateExpiry(expiryInput.value)) {
+                expiryInput.classList.add('error');
+                document.getElementById('expiryError').style.display = 'block';
+                isValid = false;
+            }
+
+            if (cvcInput.value.length < 3) {
+                cvcInput.classList.add('error');
+                document.getElementById('cvcError').style.display = 'block';
+                isValid = false;
+            }
+        }
+
+        if (!isValid) {
+            e.preventDefault();
+        } else {
+            const btn = document.getElementById('payButton');
+            btn.innerText = "Processing...";
+            btn.style.opacity = "0.7";
+            btn.style.pointerEvents = "none";
+        }
+    });
 </script>
 {% endblock %}

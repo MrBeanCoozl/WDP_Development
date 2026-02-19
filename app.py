@@ -46,6 +46,11 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# ---> ADD THESE 3 LINES FOR PRODUCTS <---
+PRODUCT_UPLOAD_FOLDER = os.path.join(basedir, 'static', 'product_images')
+app.config['PRODUCT_UPLOAD_FOLDER'] = PRODUCT_UPLOAD_FOLDER
+os.makedirs(PRODUCT_UPLOAD_FOLDER, exist_ok=True)
+
 # 4. Email Configuration
 app.config['SMTP_SERVER'] = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
 app.config['SMTP_EMAIL'] = os.environ.get('SMTP_EMAIL')
@@ -1788,13 +1793,15 @@ def store_checkout():
             else:
                 payment_desc = f"{payment_type.title()}"
 
-            # 2. Capture Shipping
+# 2. Capture Shipping & Remarks
+            remarks = request.form.get('remarks', '').strip()
             shipping_info = {
                 'first_name': request.form.get('first_name'),
                 'last_name': request.form.get('last_name'),
                 'address': request.form.get('address'),
                 'city': request.form.get('city'),
-                'zip': request.form.get('zip')
+                'zip': request.form.get('zip'),
+                'remarks': remarks
             }
 
             # 3. CREATE RECORDS
@@ -1805,12 +1812,16 @@ def store_checkout():
                 db.session.commit()
 
             order_code = f"ORD-{datetime.now().strftime('%Y%m%d')}-{random.randint(1000,9999)}"
+            
+            # Combine the payment description, address, and remarks
             full_desc = f"{payment_desc} | Ship to: {shipping_info['address']}"
+            if remarks:
+                full_desc += f" | Remarks: {remarks}"
             
             new_order = Order(
                 order_code=order_code, 
                 client_id=client.id,
-                description=full_desc[:200],
+                description=full_desc[:200], # Ensures it doesn't exceed DB limits
                 amount=totals['grand_total'], 
                 status='Pending',
                 date_placed=datetime.utcnow()
@@ -2190,6 +2201,124 @@ def login():
             
     return render_template('login.html')
 
+# ==============================================================================
+# ADMIN PRODUCT MANAGEMENT
+# ==============================================================================
+@app.route('/admin/products')
+@admin_required
+def admin_products():
+    page = request.args.get('page', 1, type=int)
+    search_query = request.args.get('q', '').strip()
+    
+    query = Product.query
+    if search_query:
+        query = query.filter(or_(
+            Product.name.ilike(f'%{search_query}%'),
+            Product.category.ilike(f'%{search_query}%')
+        ))
+        
+    products_pagination = query.order_by(Product.id.desc()).paginate(page=page, per_page=15, error_out=False)
+    return render_template('admin_products.html', products=products_pagination)
+
+@app.route('/admin/product/new', methods=['GET', 'POST'])
+@admin_required
+def admin_product_new():
+    if request.method == 'POST':
+        try:
+            # 1. Handle Images
+            images = request.files.getlist('images')
+            image_filenames = []
+            
+            for img in images:
+                if img and img.filename != '' and allowed_file(img.filename):
+                    file_ext = img.filename.rsplit('.', 1)[1].lower()
+                    # Generate safe, unique filename
+                    filename = secure_filename(f"prod_{datetime.now().strftime('%Y%m%d%H%M%S')}_{random.randint(1000,9999)}.{file_ext}")
+                    img.save(os.path.join(app.config['PRODUCT_UPLOAD_FOLDER'], filename))
+                    image_filenames.append(filename)
+            
+            image_url_string = "|".join(image_filenames) if image_filenames else "default_product.jpg"
+
+            # 2. Create Product
+            new_prod = Product(
+                name=request.form.get('name'),
+                price=float(request.form.get('price', 0)),
+                category=request.form.get('category'),
+                description=request.form.get('description'),
+                stock=int(request.form.get('stock', 0)),
+                sizes=request.form.get('sizes'),
+                colors=request.form.get('colors'),
+                image_url=image_url_string
+            )
+            
+            db.session.add(new_prod)
+            db.session.commit()
+            
+            log_action('Admin', g.user.username, 'Create Product', 'Product', new_prod.name, 'Success', 'Added new product')
+            flash("Product created successfully.", "success")
+            return redirect(url_for('admin_products'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error creating product: {str(e)}", "danger")
+            
+    return render_template('admin_product_form.html', product=None)
+
+@app.route('/admin/product/edit/<int:prod_id>', methods=['GET', 'POST'])
+@admin_required
+def admin_product_edit(prod_id):
+    product = Product.query.get_or_404(prod_id)
+    
+    if request.method == 'POST':
+        try:
+            product.name = request.form.get('name')
+            product.price = float(request.form.get('price', 0))
+            product.category = request.form.get('category')
+            product.description = request.form.get('description')
+            product.stock = int(request.form.get('stock', 0))
+            product.sizes = request.form.get('sizes')
+            product.colors = request.form.get('colors')
+            
+            # Handle Image Replacement (Only updates if new files are uploaded)
+            images = request.files.getlist('images')
+            if images and images[0].filename != '':
+                image_filenames = []
+                for img in images:
+                    if img and allowed_file(img.filename):
+                        file_ext = img.filename.rsplit('.', 1)[1].lower()
+                        filename = secure_filename(f"prod_{datetime.now().strftime('%Y%m%d%H%M%S')}_{random.randint(1000,9999)}.{file_ext}")
+                        img.save(os.path.join(app.config['PRODUCT_UPLOAD_FOLDER'], filename))
+                        image_filenames.append(filename)
+                
+                if image_filenames:
+                    product.image_url = "|".join(image_filenames)
+
+            db.session.commit()
+            log_action('Admin', g.user.username, 'Update Product', 'Product', product.name, 'Success', 'Updated product details')
+            flash("Product updated successfully.", "success")
+            return redirect(url_for('admin_products'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Error updating product: {str(e)}", "danger")
+
+    return render_template('admin_product_form.html', product=product)
+
+@app.route('/admin/product/delete/<int:prod_id>', methods=['POST'])
+@admin_required
+def admin_product_delete(prod_id):
+    try:
+        product = Product.query.get_or_404(prod_id)
+        prod_name = product.name
+        db.session.delete(product)
+        db.session.commit()
+        log_action('Admin', g.user.username, 'Delete Product', 'Product', prod_name, 'Success', 'Deleted product')
+        flash("Product deleted successfully.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash("Error: Cannot delete product. It may be linked to existing orders.", "danger")
+        
+    return redirect(url_for('admin_products'))
 # ==============================================================================
 # UPDATED DASHBOARD ROUTE (With CSAT & Cancellation Metrics)
 # ==============================================================================

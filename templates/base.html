@@ -56,6 +56,11 @@
         <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.path == '/dashboard' else '' }}">
             <i class="fa-solid fa-chart-line" style="margin-right: 10px;"></i>Dashboard
         </a>
+
+        <a href="{{ url_for('admin_products') }}" class="{{ 'active' if request.path.startswith('/admin/product') else '' }}">
+            <i class="fa-solid fa-tags" style="margin-right: 10px;"></i>Products
+        </a>
+
         <a href="{{ url_for('orders') }}" class="{{ 'active' if request.path == '/orders' else '' }}">
             <i class="fa-solid fa-shirt" style="margin-right: 10px;"></i>Orders
         </a>
@@ -68,7 +73,7 @@
         
         {% if g.user and g.user.role == 'SuperAdmin' %}
             <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0; padding-top: 10px;">
-                <a href="{{ url_for('admin_panel') }}" class="{{ 'active' if request.path.startswith('/admin') else '' }}" style="color: #ff9f43;">
+                <a href="{{ url_for('admin_panel') }}" class="{{ 'active' if request.path == '/admin/panel' else '' }}" style="color: #ff9f43;">
                     <i class="fa-solid fa-user-shield" style="margin-right: 10px;"></i>Admin Panel
                 </a>
             </div>

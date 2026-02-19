@@ -111,6 +111,7 @@
         transition: border-color 0.3s;
         background: #fafafa;
         font-family: inherit;
+        box-sizing: border-box;
     }
     .form-control:focus {
         outline: none;
@@ -141,20 +142,48 @@
     .rating-wrapper label:hover ~ label { color: #111; }
 
     /* --- BUTTONS --- */
+    .button-group {
+        display: flex;
+        gap: 15px;
+        margin-top: 10px;
+    }
+
     .btn-submit {
-        width: 100%;
+        flex: 2;
         background: #111;
         color: white;
         padding: 16px;
         font-size: 13px;
         font-weight: 700;
         text-transform: uppercase;
-        border: none;
+        border: 1px solid #111;
         cursor: pointer;
         letter-spacing: 1px;
-        transition: opacity 0.3s;
+        transition: all 0.3s;
+        box-sizing: border-box;
     }
     .btn-submit:hover { opacity: 0.8; }
+
+    .btn-done {
+        flex: 1;
+        background: transparent;
+        color: #111;
+        padding: 16px;
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        border: 1px solid #e5e5e5;
+        cursor: pointer;
+        letter-spacing: 1px;
+        transition: all 0.3s;
+        text-align: center;
+        text-decoration: none;
+        box-sizing: border-box;
+    }
+    .btn-done:hover {
+        border-color: #111;
+        background: #fafafa;
+    }
 
     .btn-secondary-link {
         display: block;
@@ -182,6 +211,8 @@
         .success-card { padding: 30px 20px; }
         .success-page-wrapper { padding: 20px; }
         h1 { font-size: 26px; }
+        .button-group { flex-direction: column; gap: 10px; }
+        .btn-submit, .btn-done { flex: unset; width: 100%; }
     }
 </style>
 
@@ -254,7 +285,10 @@
                     <textarea name="comment" rows="4" class="form-control" placeholder="How was the fit and quality?"></textarea>
                 </div>
 
-                <button type="submit" class="btn-submit">Submit Review</button>
+                <div class="button-group">
+                    <button type="submit" class="btn-submit">Submit Review</button>
+                    <a href="{{ url_for('store_home') }}" class="btn-done">Done</a>
+                </div>
             </form>
         </div>
         {% endif %}

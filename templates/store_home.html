@@ -12,7 +12,6 @@
         opacity: 0.9;
         pointer-events: none;
         box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        /* SLOWED DOWN: 0.8s -> 1.2s */
         transition: all 1.2s cubic-bezier(0.19, 1, 0.22, 1);
     }
 </style>
@@ -61,7 +60,10 @@
             <div class="product-card">
                 <div class="card-image-wrap">
                     <a href="{{ url_for('store_product', product_id=product.id) }}">
-                        <img src="{{ product.image_url.split('|')[0] }}" 
+                        {% set first_raw = product.image_url.split('|')[0].strip() if product.image_url else 'default.jpg' %}
+                        {% set img_src = first_raw if first_raw.startswith('http') else url_for('static', filename='product_images/' + first_raw) %}
+                        
+                        <img src="{{ img_src }}" 
                         data-photos="{{ product.image_url }}"
                         class="looping-image" 
                         alt="{{ product.name }}"
@@ -108,7 +110,10 @@
             <div class="product-card">
                 <div class="card-image-wrap">
                     <a href="{{ url_for('store_product', product_id=product.id) }}">
-                        <img src="{{ product.image_url.split('|')[0] }}" 
+                        {% set first_raw = product.image_url.split('|')[0].strip() if product.image_url else 'default.jpg' %}
+                        {% set img_src = first_raw if first_raw.startswith('http') else url_for('static', filename='product_images/' + first_raw) %}
+                        
+                        <img src="{{ img_src }}" 
                         data-photos="{{ product.image_url }}"
                         class="looping-image" 
                         alt="{{ product.name }}"
@@ -140,42 +145,68 @@
     </div>
 </section>
 
-<section class="section-pad container">
-    <h2 class="section-title text-center mb-50" style="font-size: 36px;">Explore Categories</h2>
-    
-    <div class="bento-grid">
-        <a href="{{ url_for('store_shop', category='Formal') }}" class="bento-item span-2-row span-2-col">
-            <img src="https://images.unsplash.com/photo-1600091106787-88069af720c2?q=80&w=900&auto=format&fit=crop" alt="Formal Collection">
-            <div class="bento-overlay">
-                <h3>Formal Edit</h3>
-                <span class="btn-link">Shop Now</span>
-            </div>
-        </a>
+<section class="section-pad" style="margin-top: 40px; margin-bottom: 40px;">
+    <div class="bento-container">
+        <div class="text-center mb-50">
+            <span style="display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; color: #888; margin-bottom: 12px;">The Collections</span>
+            <h2 class="section-title" style="font-size: 40px; letter-spacing: -1.5px;">Explore Categories</h2>
+        </div>
         
-        <a href="{{ url_for('store_shop', category='Casual') }}" class="bento-item span-2-col">
-            <img src="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=800&q=80" alt="Casual Essentials">
-            <div class="bento-overlay">
-                <h3>Casual Essentials</h3>
-            </div>
-        </a>
-        
-        <a href="{{ url_for('store_shop', category='Shoes') }}" class="bento-item">
-            <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80" alt="Shoes">
-            <div class="bento-overlay">
-                <h3>Shoes</h3>
-            </div>
-        </a>
-        
-        <a href="{{ url_for('store_shop', category='Accessories') }}" class="bento-item">
-            <img src="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=600&q=80" alt="Accessories">
-            <div class="bento-overlay">
-                <h3>Accessories</h3>
-            </div>
-        </a>
+        <div class="editorial-bento">
+            <a href="{{ url_for('store_shop', category='Formal') }}" class="ed-item feature-main">
+                <div class="ed-image-wrap">
+                    <img src="https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1200&auto=format&fit=crop" alt="Formal Collection">
+                </div>
+                <div class="ed-overlay">
+                    <div class="ed-content">
+                        <h3>Formal Edit</h3>
+                        <p>Elevated tailoring and sharp silhouettes for the modern professional.</p>
+                        <span class="ed-link">Discover <i class="fa-solid fa-arrow-right-long"></i></span>
+                    </div>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('store_shop', category='Casual') }}" class="ed-item feature-horizontal">
+                <div class="ed-image-wrap">
+                    <img src="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=1000&q=80" alt="Casual Essentials">
+                </div>
+                <div class="ed-overlay">
+                    <div class="ed-content">
+                        <h3>Casual Essentials</h3>
+                        <p>Relaxed fits crafted from premium, breathable fabrics.</p>
+                        <span class="ed-link">Discover <i class="fa-solid fa-arrow-right-long"></i></span>
+                    </div>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('store_shop', category='Shoes') }}" class="ed-item feature-square">
+                <div class="ed-image-wrap">
+                    <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80" alt="Shoes">
+                </div>
+                <div class="ed-overlay">
+                    <div class="ed-content">
+                        <h3>Footwear</h3>
+                        <span class="ed-link">Discover <i class="fa-solid fa-arrow-right-long"></i></span>
+                    </div>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('store_shop', category='Accessories') }}" class="ed-item feature-square">
+                <div class="ed-image-wrap">
+                    <img src="https://images.unsplash.com/photo-1588850561407-ed78c282e89b?auto=format&fit=crop&w=800&q=80" alt="Accessories">
+                </div>
+                <div class="ed-overlay">
+                    <div class="ed-content">
+                        <h3>Accessories</h3>
+                        <span class="ed-link">Discover <i class="fa-solid fa-arrow-right-long"></i></span>
+                    </div>
+                </div>
+            </a>
+        </div>
     </div>
 </section>
 
-<section class="section-pad bg-light overflow-hidden text-center" style="margin-top: 20px;">
+<section class="section-pad bg-light overflow-hidden text-center" style="border-top: 1px solid #eaeaea;">
     <h2 class="section-title mb-10">Client Experiences</h2>
     <p class="text-muted mb-40">Trusted by style enthusiasts worldwide.</p>
 
@@ -213,7 +244,6 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // ... [Intersection Observer code] ...
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) entry.target.classList.add('show');
@@ -230,13 +260,11 @@
             form.addEventListener('submit', function(e) {
                 e.preventDefault(); 
                 
-                const btn = this.querySelector('button');
                 const productId = this.dataset.id;
                 const prefix = this.dataset.prefix || '';
                 const sourceImg = document.getElementById(`img-${prefix}${productId}`);
                 const cartIcon = document.querySelector('.fa-bag-shopping');
                 
-                // Animation
                 if (sourceImg && cartIcon) {
                     const flyingImg = sourceImg.cloneNode();
                     flyingImg.classList.add('flying-img');
@@ -251,7 +279,7 @@
                     
                     document.body.appendChild(flyingImg);
                     
-                    void flyingImg.offsetWidth; // Trigger reflow
+                    void flyingImg.offsetWidth; 
                     
                     flyingImg.style.top = (endRect.top + 5) + 'px';
                     flyingImg.style.left = (endRect.left + 5) + 'px';
@@ -259,7 +287,6 @@
                     flyingImg.style.height = '20px';
                     flyingImg.style.opacity = '0';
                     
-                    // SLOWED DOWN: 1.2s timeout to match CSS
                     setTimeout(() => {
                         flyingImg.remove();
                         cartIcon.parentElement.style.transform = 'scale(1.2)';
@@ -268,7 +295,6 @@
                     }, 1200);
                 }
                 
-                // Fetch Request
                 const formData = new FormData(this);
                 fetch("{{ url_for('store_cart') }}", {
                     method: 'POST',
@@ -291,136 +317,26 @@
             });
         });
     });
-</script>
 
-<style>
-    /* ... [Keep existing styles] ... */
-    /* ... [Only verify the .flying-img CSS block matches the one at the top of this file] ... */
-    :root { --bg-light: #f9f9f9; --text-dark: #111; --muted: #777; --gold: #FFD700; }
-    .bg-white { background: #fff; } .bg-light { background: var(--bg-light); } .text-center { text-align: center; } .relative { position: relative; } .overflow-hidden { overflow: hidden; }
-    .mb-10 { margin-bottom: 10px; } .mb-40 { margin-bottom: 40px; } .mb-50 { margin-bottom: 50px; }
-    .text-muted { color: var(--muted); font-size: 14px; }
-    .section-pad { padding: 40px 0; }
-    
-    .header-flex { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 25px; }
-    
-    .hidden { opacity: 0; transform: translateY(30px); transition: all 0.8s ease; }
-    .show { opacity: 1; transform: translateY(0); }
-    @keyframes slowPan { 0% { transform: scale(1); } 100% { transform: scale(1.15); } }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-    .section-title { font-size: 32px; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; margin: 0; line-height: 1; color: var(--text-dark); }
-    
-    /* ANIMATED VIEW ALL LINK */
-    .view-all-link { 
-        font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; 
-        color: black; text-decoration: none; position: relative; padding-bottom: 2px;
-    }
-    .view-all-link::after {
-        content: ''; position: absolute; width: 0; height: 2px; 
-        bottom: 0; left: 0; background-color: #000; transition: width 0.3s ease;
-    }
-    .view-all-link:hover::after { width: 100%; }
-
-    /* Hero */
-    .hero-btn { background: white; color: black; padding: 15px 40px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; display: inline-block; }
-    .hero-btn:hover { background: black; color: white; transform: translateY(-2px); }
-    .animate-up { animation: fadeInUp 1s ease backwards 0.3s; }
-    @keyframes slowZoom { from { transform: scale(1); } to { transform: scale(1.1); } }
-
-    /* Marquee */
-    .marquee-container { background: black; color: white; padding: 14px 0; overflow: hidden; }
-    .marquee-track { display: flex; white-space: nowrap; animation: scrollInfinite 30s linear infinite; }
-    .marquee-item { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; padding: 0 3vw; }
-    @keyframes scrollInfinite { 0% { transform: translateX(0); } 100% { transform: translateX(-33.33%); } }
-
-    /* Static Grid */
-    .static-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-
-    /* Product Cards */
-    .product-card { background: transparent; transition: transform 0.3s ease; border-radius: 4px; }
-    .product-card:hover { transform: translateY(-5px); }
-    
-    .card-image-wrap { position: relative; aspect-ratio: 4/5; background: #f0f0f0; overflow: hidden; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: 0.3s; }
-    .product-card:hover .card-image-wrap { box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
-    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.7s ease; }
-    .product-card:hover img { transform: scale(1.08); }
-
-    .card-info { padding: 12px 0; display: block; text-align: center; }
-    .card-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #999; margin-bottom: 4px; letter-spacing: 1px; }
-    .card-name { font-size: 14px; font-weight: 600; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-dark); }
-    
-    /* Meta & Stars */
-    .card-rating { font-size: 10px; color: var(--gold); margin-bottom: 0; }
-    .card-sold { font-weight: 700; color: #777; margin-left: 5px; } 
-    .card-meta { display: flex; justify-content: center; align-items: center; gap: 5px; font-size: 10px; margin-bottom: 5px; }
-
-    .card-price { font-size: 14px; font-weight: 800; color: var(--text-dark); }
-
-    .quick-add-icon { position: absolute; bottom: 15px; right: 15px; width: 32px; height: 32px; border-radius: 50%; background: white; color: black; border: none; display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; opacity: 0; transform: translateY(10px) scale(0.9); transition: all 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .quick-add-icon:hover { background: black; color: white; }
-    .product-card:hover .quick-add-icon { opacity: 1; transform: translateY(0) scale(1); }
-
-    .badge-new, .badge-hot { position: absolute; top: 10px; left: 10px; padding: 4px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: white; }
-    .badge-new { background: #000; } .badge-hot { background: #e11d48; }
-
-    /* Bento Grid */
-    .bento-grid { 
-        display: grid; 
-        grid-template-columns: repeat(4, 1fr); 
-        grid-auto-rows: 150px; 
-        gap: 15px; 
-    }
-    .bento-item { position: relative; overflow: hidden; border-radius: 4px; }
-    .bento-item img { 
-        width: 100%; height: 100%; object-fit: cover; 
-        transition: 0.7s ease; 
-        display: block; 
-    }
-    .bento-item:hover img { transform: scale(1.06); }
-    .bento-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent 40%); padding: 20px; display: flex; flex-direction: column; justify-content: flex-end; color: white; }
-    .bento-overlay h3 { margin: 0 0 10px; font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.5px; text-shadow: 0 2px 10px rgba(0,0,0,0.2); }
-    .btn-link { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; text-decoration: underline; text-underline-offset: 4px; opacity: 0.9; transition: 0.3s; }
-    .bento-item:hover .btn-link { opacity: 1; padding-left: 5px; }
-    .span-2-col { grid-column: span 2; } .span-2-row { grid-row: span 2; }
-
-    /* Reviews */
-    .reviews-marquee-container { overflow: hidden; padding: 20px 0; }
-    .reviews-track { display: flex; width: max-content; animation: scrollReviews 80s linear infinite; }
-    .reviews-track:hover { animation-play-state: paused; }
-    .review-card { width: 340px; background: white; padding: 35px; margin: 0 15px; border-radius: 4px; text-align: left; box-shadow: 0 5px 20px rgba(0,0,0,0.03); border: 1px solid #f5f5f5; }
-    
-    /* REVIEWS STARS YELLOW */
-    .stars { color: var(--gold); letter-spacing: 2px; font-size: 14px; margin-bottom: 15px; }
-    
-    .review-card h4 { font-size: 17px; font-weight: 800; margin: 0 0 10px; color: var(--text-dark); }
-    .review-card p { font-size: 15px; line-height: 1.6; color: #555; font-style: italic; margin-bottom: 20px; }
-    .reviewer { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
-    .reviewer i { color: #2563eb; }
-    @keyframes scrollReviews { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-
-    /* Responsive */
-    @media (max-width: 900px) { 
-        .static-grid { grid-template-columns: repeat(2, 1fr); } 
-        .bento-grid { grid-template-columns: 1fr; grid-auto-rows: 220px; } .span-2-col, .span-2-row { grid-column: span 1; grid-row: span 1; }
-        .section-title { font-size: 32px; }
-    }
-    @media (max-width: 600px) { 
-        .static-grid { grid-template-columns: 1fr; }
-    }
-</style>
-<script>
+    // Looping Product Image Script
     document.addEventListener("DOMContentLoaded", function() {
         const images = document.querySelectorAll('.looping-image');
+        const staticPath = "{{ url_for('static', filename='product_images/') }}";
+        
         images.forEach(img => {
-            const photos = img.dataset.photos.split('|');
-            if (photos.length <= 1) return;
-            let idx = 0;
+            if (!img.dataset.photos) return;
+            const rawPhotos = img.dataset.photos.split('|');
+            if (rawPhotos.length <= 1) return;
             
-            // Auto-cycle every 3 seconds
+            const photos = rawPhotos.map(p => {
+                let clean = p.trim();
+                return clean.startsWith('http') ? clean : staticPath + clean;
+            });
+
+            let idx = 0;
             setInterval(() => {
                 idx = (idx + 1) % photos.length;
-                img.style.opacity = 0.8; // Brief fade out
+                img.style.opacity = 0.8; 
                 setTimeout(() => {
                     img.src = photos[idx];
                     img.style.opacity = 1;
@@ -429,4 +345,175 @@
         });
     });
 </script>
+
+<style>
+    /* UTILS */
+    :root { --bg-light: #f9f9f9; --text-dark: #111; --muted: #777; --gold: #FFD700; }
+    .bg-white { background: #fff; } .bg-light { background: var(--bg-light); } .text-center { text-align: center; } 
+    .mb-10 { margin-bottom: 10px; } .mb-40 { margin-bottom: 40px; } .mb-50 { margin-bottom: 50px; }
+    .text-muted { color: var(--muted); font-size: 14px; }
+    .section-pad { padding: 80px 0; }
+    .header-flex { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 35px; }
+    
+    /* ANIMATIONS */
+    .hidden { opacity: 0; transform: translateY(30px); transition: all 0.8s ease; }
+    .show { opacity: 1; transform: translateY(0); }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slowZoom { from { transform: scale(1); } to { transform: scale(1.1); } }
+    @keyframes scrollInfinite { 0% { transform: translateX(0); } 100% { transform: translateX(-33.33%); } }
+    @keyframes scrollReviews { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+    .animate-up { animation: fadeInUp 1s ease backwards 0.3s; }
+
+    /* TYPOGRAPHY */
+    .section-title { font-size: 32px; font-weight: 800; text-transform: uppercase; letter-spacing: -1px; margin: 0; line-height: 1; color: var(--text-dark); }
+    .view-all-link { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: black; text-decoration: none; position: relative; padding-bottom: 2px; }
+    .view-all-link::after { content: ''; position: absolute; width: 0; height: 2px; bottom: 0; left: 0; background-color: #000; transition: width 0.3s ease; }
+    .view-all-link:hover::after { width: 100%; }
+
+    /* HERO & MARQUEE */
+    .hero-btn { background: white; color: black; padding: 15px 40px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: 0.3s; display: inline-block; }
+    .hero-btn:hover { background: black; color: white; transform: translateY(-2px); }
+    .marquee-container { background: black; color: white; padding: 14px 0; overflow: hidden; }
+    .marquee-track { display: flex; white-space: nowrap; animation: scrollInfinite 30s linear infinite; }
+    .marquee-item { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; padding: 0 3vw; }
+
+    /* PRODUCT GRID */
+    .static-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .product-card { background: transparent; transition: transform 0.3s ease; border-radius: 4px; }
+    .product-card:hover { transform: translateY(-5px); }
+    .card-image-wrap { position: relative; aspect-ratio: 4/5; background: #f0f0f0; overflow: hidden; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); transition: 0.3s; }
+    .product-card:hover .card-image-wrap { box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+    .card-image-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.7s ease; }
+    .product-card:hover img { transform: scale(1.08); }
+
+    .card-info { padding: 16px 0; display: block; text-align: center; }
+    .card-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #999; margin-bottom: 6px; letter-spacing: 1px; }
+    .card-name { font-size: 15px; font-weight: 700; margin: 0 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-dark); letter-spacing: -0.2px; }
+    .card-rating { font-size: 10px; color: var(--gold); }
+    .card-sold { font-weight: 700; color: #777; margin-left: 5px; } 
+    .card-meta { display: flex; justify-content: center; align-items: center; gap: 5px; font-size: 10px; margin-bottom: 8px; }
+    .card-price { font-size: 14px; font-weight: 800; color: var(--text-dark); }
+
+    .quick-add-icon { position: absolute; bottom: 15px; right: 15px; width: 36px; height: 36px; border-radius: 50%; background: white; color: black; border: none; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; opacity: 0; transform: translateY(10px) scale(0.9); transition: all 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .quick-add-icon:hover { background: black; color: white; }
+    .product-card:hover .quick-add-icon { opacity: 1; transform: translateY(0) scale(1); }
+
+    .badge-new, .badge-hot { position: absolute; top: 10px; left: 10px; padding: 4px 8px; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: white; border-radius: 2px; }
+    .badge-new { background: #000; } .badge-hot { background: #e11d48; }
+
+    /* ========================================================= */
+    /* THE TIGHTER, MORE PREMIUM BENTO BOX */
+    /* ========================================================= */
+    
+    /* Reduced width for a more elegant, magazine-like inset feel */
+    .bento-container {
+        max-width: 1150px;
+        margin: 0 auto;
+        padding: 0 20px;
+    }
+
+    .editorial-bento {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        grid-auto-rows: 280px; /* Reduced from 350px so they aren't so massive */
+        gap: 20px;
+    }
+
+    /* BENTO MAPPING RULES */
+    .feature-main { grid-column: span 2; grid-row: span 2; } /* Left side */
+    .feature-horizontal { grid-column: span 2; grid-row: span 1; } /* Top right */
+    .feature-square { grid-column: span 1; grid-row: span 1; } /* Bottom right splits */
+    
+    .ed-item {
+        position: relative;
+        overflow: hidden;
+        border-radius: 4px;
+        display: block;
+        background: #000;
+        cursor: pointer;
+    }
+
+    .ed-image-wrap {
+        position: absolute; inset: 0;
+        transition: transform 1.2s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    .ed-item img {
+        width: 100%; height: 100%; object-fit: cover;
+        opacity: 0.85; transition: opacity 0.6s ease;
+    }
+
+    .ed-overlay {
+        position: absolute; inset: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 60%);
+        display: flex; flex-direction: column; justify-content: flex-end;
+        padding: 30px; /* Scaled down padding for smaller boxes */
+        color: white;
+        transition: background 0.6s ease;
+    }
+
+    .ed-content h3 {
+        font-size: 26px; /* Scaled down slightly */
+        font-weight: 800; text-transform: uppercase;
+        margin: 0 0 10px; letter-spacing: -0.5px; line-height: 1.1;
+        transform: translateY(30px); /* Tuned for new box height */
+        transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    .ed-content p {
+        font-size: 13px; /* Scaled down slightly */
+        color: #ddd; margin: 0 0 20px; font-weight: 500;
+        opacity: 0; transform: translateY(20px);
+        transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    .ed-link {
+        font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 2px;
+        display: inline-flex; align-items: center; gap: 8px;
+        opacity: 0; transform: translateY(20px);
+        transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    .ed-link i { font-size: 14px; transition: transform 0.3s ease; }
+
+    /* Hover Effects */
+    .ed-item:hover .ed-image-wrap { transform: scale(1.05); }
+    .ed-item:hover img { opacity: 0.6; }
+    .ed-item:hover .ed-overlay { background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, transparent 70%); }
+    .ed-item:hover .ed-content h3 { transform: translateY(0); }
+    .ed-item:hover .ed-content p, 
+    .ed-item:hover .ed-link { transform: translateY(0); opacity: 1; }
+    .ed-item:hover .ed-link i { transform: translateX(5px); }
+
+    /* Small Box Tuning */
+    .feature-square .ed-overlay { padding: 20px; } 
+    .feature-square .ed-content h3 { font-size: 20px; transform: translateY(25px); }
+    .feature-square .ed-content p { display: none; }
+
+
+    /* REVIEWS */
+    .reviews-marquee-container { overflow: hidden; padding: 30px 0; }
+    .reviews-track { display: flex; width: max-content; animation: scrollReviews 80s linear infinite; }
+    .reviews-track:hover { animation-play-state: paused; }
+    .review-card { width: 360px; background: white; padding: 40px; margin: 0 15px; border-radius: 8px; text-align: left; box-shadow: 0 10px 30px rgba(0,0,0,0.03); border: 1px solid #f0f0f0; }
+    .stars { color: var(--gold); letter-spacing: 2px; font-size: 14px; margin-bottom: 15px; }
+    .review-card h4 { font-size: 18px; font-weight: 800; margin: 0 0 12px; color: var(--text-dark); }
+    .review-card p { font-size: 15px; line-height: 1.6; color: #555; font-style: italic; margin-bottom: 25px; }
+    .reviewer { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; color: #111; }
+    .reviewer i { color: #2563eb; }
+
+    /* RESPONSIVE BREAKPOINTS */
+    @media (max-width: 1024px) { 
+        .editorial-bento { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 280px; }
+        .feature-main { grid-column: span 2; grid-row: span 2; }
+        .feature-horizontal { grid-column: span 2; grid-row: span 1; }
+        .feature-square { grid-column: span 1; grid-row: span 1; }
+        .static-grid { grid-template-columns: repeat(2, 1fr); } 
+    }
+    @media (max-width: 600px) { 
+        .editorial-bento { grid-template-columns: 1fr; grid-auto-rows: 250px; }
+        .feature-main, .feature-horizontal, .feature-square { grid-column: span 1; grid-row: span 1; }
+        .static-grid { grid-template-columns: 1fr; }
+    }
+</style>
 {% endblock %}
