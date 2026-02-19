@@ -2347,6 +2347,25 @@ def admin_product_delete(prod_id):
         flash("Error: Cannot delete product. It may be linked to existing orders.", "danger")
         
     return redirect(url_for('admin_products'))
+
+@app.route('/admin/product/add_stock/<int:prod_id>', methods=['POST'])
+@admin_required
+def admin_product_add_stock(prod_id):
+    product = Product.query.get_or_404(prod_id)
+    try:
+        added_qty = int(request.form.get('quantity', 0))
+        if added_qty > 0:
+            product.stock += added_qty
+            db.session.commit()
+            log_action('Admin', g.user.username, 'Add Stock', 'Product', product.name, 'Success', f'Added {added_qty} units')
+            flash(f"Successfully added {added_qty} units to {product.name}. New total: {product.stock}", "success")
+        else:
+            flash("Invalid quantity entered. Must be greater than 0.", "warning")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error updating stock: {str(e)}", "danger")
+        
+    return redirect(request.referrer or url_for('admin_products'))
 # ==============================================================================
 # UPDATED DASHBOARD ROUTE (With CSAT & Cancellation Metrics)
 # ==============================================================================

@@ -25,12 +25,23 @@
     .text-success { color: #27ae60; font-weight: bold; }
     
     .action-btns { display: flex; gap: 8px; }
-    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; cursor: pointer; }
     
     .pagination { display: flex; list-style: none; gap: 5px; justify-content: center; padding: 20px; background: white; border-top: 1px solid #ecf0f1; border-radius: 0 0 8px 8px; }
     .page-link { display: block; padding: 8px 12px; background: white; border: 1px solid #bdc3c7; border-radius: 4px; color: #2c3e50; text-decoration: none; font-size: 13px; font-weight: bold; transition: 0.2s; }
     .page-link:hover, .page-item.active .page-link { background: #3498db; color: white; border-color: #3498db; }
     .page-item.disabled .page-link { color: #bdc3c7; border-color: #ecf0f1; background: #fdfdfd; pointer-events: none; }
+
+    /* Custom Modal Styles */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; backdrop-filter: blur(4px); justify-content: center; align-items: center; animation: fadeIn 0.2s ease-out; }
+    .modal-box { background: white; width: 450px; max-width: 90%; padding: 30px; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.2); transform: translateY(0); animation: slideUp 0.3s ease-out; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ecf0f1; padding-bottom: 15px; }
+    .modal-header h3 { margin: 0; font-size: 18px; color: #2c3e50; }
+    .close-btn { background: none; border: none; font-size: 20px; color: #95a5a6; cursor: pointer; transition: 0.2s; }
+    .close-btn:hover { color: #e74c3c; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 </style>
 
 <div class="admin-top-bar">
@@ -86,9 +97,14 @@
                 <td style="color: #7f8c8d;">{{ p.sales_count }}</td>
                 <td>
                     <div class="action-btns">
-                        <a href="{{ url_for('admin_product_edit', prod_id=p.id) }}" class="btn btn-primary btn-sm"><i class="fa-solid fa-pen"></i></a>
+                        <button type="button" class="btn btn-success btn-sm" onclick="openStockModal({{ p.id }}, '{{ p.name|replace('\'', '\\\'') }}')" title="Quick Add Stock">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                        
+                        <a href="{{ url_for('admin_product_edit', prod_id=p.id) }}" class="btn btn-primary btn-sm" title="Edit Product"><i class="fa-solid fa-pen"></i></a>
+                        
                         <form action="{{ url_for('admin_product_delete', prod_id=p.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this product?');">
-                            <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i></button>
+                            <button type="submit" class="btn btn-danger btn-sm" title="Delete Product"><i class="fa-solid fa-trash"></i></button>
                         </form>
                     </div>
                 </td>
@@ -113,4 +129,73 @@
     </ul>
     {% endif %}
 </div>
+
+<div id="addStockModal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fa-solid fa-box" style="color: #27ae60; margin-right: 8px;"></i> Quick Add Stock</h3>
+            <button class="close-btn" onclick="closeStockModal()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        
+        <form id="addStockForm" method="POST" action="">
+            <p id="addStockMessage" style="font-size: 14px; color: #7f8c8d; margin-bottom: 20px; line-height: 1.5;"></p>
+            
+            <div style="margin-bottom: 25px;">
+                <label style="display: block; font-size: 13px; font-weight: bold; color: #2c3e50; margin-bottom: 8px;">Quantity to Add:</label>
+                <input type="number" name="quantity" id="stockQuantity" min="1" required placeholder="Enter amount (e.g. 50)" style="width: 100%; padding: 12px; border: 1px solid #bdc3c7; border-radius: 6px; font-size: 15px; outline: none; transition: 0.2s;">
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" onclick="closeStockModal()" style="background: #ecf0f1; color: #7f8c8d; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold;">Cancel</button>
+                <button type="submit" style="background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold;">Confirm Addition</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Focus styling for the input
+    document.getElementById('stockQuantity').addEventListener('focus', function() {
+        this.style.borderColor = '#27ae60';
+        this.style.boxShadow = '0 0 0 3px rgba(39, 174, 96, 0.2)';
+    });
+    document.getElementById('stockQuantity').addEventListener('blur', function() {
+        this.style.borderColor = '#bdc3c7';
+        this.style.boxShadow = 'none';
+    });
+
+    // Open Modal Logic
+    function openStockModal(prodId, prodName) {
+        const modal = document.getElementById('addStockModal');
+        const form = document.getElementById('addStockForm');
+        const message = document.getElementById('addStockMessage');
+        const qtyInput = document.getElementById('stockQuantity');
+
+        // Dynamically set the form action to point to the correct product ID route
+        form.action = `/admin/product/add_stock/${prodId}`;
+        
+        // Update the message so the user knows exactly which product they are editing
+        message.innerHTML = `How many units of <strong style="color: #2c3e50;">${prodName}</strong> would you like to add to the existing inventory?`;
+        
+        // Clear previous input
+        qtyInput.value = '';
+
+        // Show modal and focus the input field automatically for speed
+        modal.style.display = 'flex';
+        qtyInput.focus();
+    }
+
+    // Close Modal Logic
+    function closeStockModal() {
+        document.getElementById('addStockModal').style.display = 'none';
+    }
+
+    // Close the modal if the user clicks anywhere in the dark overlay background
+    window.onclick = function(event) {
+        const modal = document.getElementById('addStockModal');
+        if (event.target == modal) {
+            closeStockModal();
+        }
+    }
+</script>
 {% endblock %}
