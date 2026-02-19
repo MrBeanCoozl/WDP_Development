@@ -610,6 +610,8 @@ def store_contact():
     return render_template('store_contact.html')
 
 # --- AI CHATBOT ROUTE ---
+# --- AI CHATBOT ROUTE ---
+# --- AI CHATBOT ROUTE ---
 @app.route('/api/chat', methods=['POST'])
 def chat_bot():
     try:
@@ -618,50 +620,76 @@ def chat_bot():
         
         # 1. Securely Load API Key
         api_key = os.environ.get('GEMINI_API_KEY')
-        
-        # FIX: Handle NoneType (missing key) and Placeholder text securely
         if not api_key or 'PASTE_YOUR' in api_key:
-            print("Error: GEMINI_API_KEY is missing or invalid.")
             return jsonify({'status': 'error', 'reply': "System Error: AI service is currently unconfigured."})
 
-        # 2. Configure Gemini
         genai.configure(api_key=api_key)
         
-        # 3. Define System Instruction
-        system_instruction = """
+        # --- 2. FETCH LIVE STORE DATA ---
+        products = Product.query.limit(50).all()
+        inventory_context = "\n".join([
+            f"- {p.name} (Category: {p.category}): ${p.price:.2f} | Stock: {p.stock} | Sizes: {p.sizes} | Colors: {p.colors}" 
+            for p in products
+        ])
+
+        # --- 3. FETCH LIVE USER DATA ---
+        user_context = "Guest User (Not logged in)."
+        if g.user and g.user.role == 'Customer':
+            client = Client.query.filter_by(email=g.user.email).first()
+            if client:
+                orders = Order.query.filter_by(client_id=client.id).order_by(Order.date_placed.desc()).limit(3).all()
+                if orders:
+                    order_details = "\n".join([f"Order {o.order_code}: Status is {o.status}, Total ${o.amount:.2f}" for o in orders])
+                    user_context = f"User Name: {g.user.first_name}.\nRecent Orders:\n{order_details}"
+                else:
+                    user_context = f"User Name: {g.user.first_name}. No previous orders."
+
+        # --- 4. DYNAMIC SYSTEM INSTRUCTION ---
+        system_instruction = f"""
         You are the AI Concierge for Shop.co, a high-end fashion retailer.
         Your Persona: Professional, polite, concise, and helpful. You speak with an elegant tone.
         
-        Key Information:
-        - Shipping: Free worldwide shipping on orders over $150.
+        Store Policies:
+        - Shipping: Free worldwide shipping on orders over $150. Orders under $150 cost $15.
         - Returns: We accept returns within 30 days of purchase for unworn items.
         - Location: 88 Orchard Road, Singapore.
         - Contact: support@shop.co for complex issues.
+
+        LIVE INVENTORY DATA:
+        {inventory_context}
+
+        CURRENT USER DATA:
+        {user_context}
         
         Guidelines:
-        - Keep answers short (under 3 sentences) unless asked for details.
-        - If asked about specific stock/inventory, apologize and direct them to the 'Shop' page.
-        - Do not hallucinate order statuses. Ask them to check their Profile page.
+        - Keep answers short (under 3 sentences).
+        - Do not list the whole inventory. Only mention products relevant to their question.
+        - If they ask for order status, answer using the CURRENT USER DATA. 
         """
         
-        # 4. Generate Response
-        model = genai.GenerativeModel('gemini-1.5-flash', system_instruction=system_instruction)
+    # --- 5. GENERATE RESPONSE (FIXED MODEL NAME) ---
+        # Updated to the latest stable model version
+        model = genai.GenerativeModel(
+            model_name='gemini-1.5-flash-latest',
+            system_instruction=system_instruction
+        )
+        
         chat = model.start_chat(history=[])
         response = chat.send_message(user_msg)
         
-        # 5. Format Output (Simple cleanup)
+        # 6. Format Output (Clean up markdown bolding for the simple HTML UI)
         reply_text = response.text.replace('**', '') 
         
         return jsonify({'status': 'success', 'reply': reply_text})
         
     except Exception as e:
-        # detailed logging for debugging
         print(f"AI Chatbot Error: {str(e)}")
-        # Check if it's a specific Google API error
         if "400" in str(e) or "API key" in str(e):
             return jsonify({'status': 'error', 'reply': "Configuration Error: Invalid API Key."})
             
         return jsonify({'status': 'error', 'reply': "I apologize, but our concierge service is momentarily unavailable."})
+
+# --- AUTHENTICATION FLOW ---
     
 # --- AUTHENTICATION FLOW ---
 
